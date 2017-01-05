@@ -42,16 +42,29 @@ def video_info(videofile):
                '-print_format', 'json',
                videofile,
                ]
+    # run command
     pipe = sp.Popen(command, stdout=sp.PIPE, stderr=sp.PIPE)
     infos = json.loads(pipe.stdout.read())
     pipe.terminate()
+    # select datetime patten
+    # because somehow it does not show up the same on different platforms
+    if len(infos['format']['tags']['creation_time'])==19:
+        time_value = infos['format']['tags']['creation_time']
+        time_pattern = '%Y-%m-%d %H:%M:%S' 
+    elif len(infos['format']['tags']['creation_time'])>19:
+        time_value = infos['format']['tags']['creation_time']
+        time_pattern = '%Y-%m-%dT%H:%M:%S.%fZ' #not sure whyt the 'T' and 'Z'
+    else:
+        print '"creation_time" value: {} does not match any known pattern.'.format(
+            infos['format']['tags']['creation_time'])
+        sys.exit(-1)
+    # finally return info
     return {'file': videofile,
             'width': int(infos['streams'][0]['width']),
             'height': int(infos['streams'][0]['height']),
             'nb_frames': int(infos['streams'][0]['nb_frames']),
             'duration': float(infos['streams'][0]['duration']),
-            'creation_time': datetime.datetime.strptime(
-                infos['format']['tags']['creation_time'], '%Y-%m-%d %H:%M:%S'),
+            'creation_time': datetime.datetime.strptime(time_value, time_pattern),
             'timestamp': [float(f['best_effort_timestamp_time']) for f in infos['frames']],
             }
 
@@ -112,7 +125,7 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
                                    verbose=True, workers=None, RGB=False, cmap='gray',
                                    format='png'):
     """
-    Read frames from the video file, preprocess and save as a regular image(s).
+    Read frames from the video file, preprocess and save as regular image(s).
 
     Written by P. DERIAN 2016-08-17
     Updated by P. DERIAN 2017-01-04: added json info output.
@@ -138,7 +151,10 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
         while n<N:
             # yield the RGB or a grayscale version of the frame
             # [TODO] enable to pass custom color=>grayscale converter?
-            yield ((data['frames'][n],) if RGB else (skcolor.rgb2grey(data['frames'][n]),))
+            # Note: data is normalized to [0,1] here.
+            yield ((data['frames'][n].astype(float)/255., True) if RGB
+                   else (skcolor.rgb2grey(data['frames'][n]), True)
+                   )
             # output progress
             if disp_progress and (not (n+1)%disp_progress):
                 print '{} {:6.2f}%  (iter {})'.format(time.ctime(), 100.*(n+1.)/N, n+1)
@@ -164,18 +180,17 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
     for i, images in enumerate(processed_frames):
         img_rect, img_filt = images
         print img_rect.dtype, img_rect.min(), img_rect.max()
-
         # save the rectified version
         basename = 'src_{}{:03d}.{}'.format(prefix, i, format)
         outputfile = os.path.join(outputdir, basename)
-        skio.imsave(outputfile, (255.*img_rect).astype('uint8'))
+        skio.imsave(outputfile, img_rect)
         print 'saved', outputfile
         srcfiles.append(basename)
         # save the filtered version, if any
         if img_filt is not None:
             basename = 'filt_{}{:03d}.{}'.format(prefix, i, format)
             outputfile = os.path.join(outputdir, basename)
-            skio.imsave(outputfile, (255.*img_filt).astype('uint8'))
+            skio.imsave(outputfile, img_filt)
             print 'saved', outputfile
             filtfiles.append(basename)
 
@@ -344,9 +359,10 @@ def main(argv):
     parser.add_argument("-o", "--output", default=None, dest="outputfile", help="netcdf output file / image output directory (with -i, --img)")
     parser.add_argument("-r", "--radon", default=0., type=float, dest="radon_length", help="[DEPRECATED] length of radon filter in [m]")
     parser.add_argument("-m", "--median", default=0., type=float, dest="median_length", help="length of median filter in [m]")
-    parser.add_argument("--img", dest="asImg", action="store_true", help="export images")
+    parser.add_argument("--img", dest="asImg", action="store_true", help="export images (default)")
     parser.add_argument("--nc", dest="asImg", action="store_false", help="export NetCDF (legacy)")
     parser.add_argument("-p", "--prefix", default='', dest="prefix", help="output image prefix (with -i, --img)")
+    parser.add_argument("-f", "--format", default='jpg', dest="format", help="output image format (with -i, --img)")
     parser.add_argument("videofile", type=str, default=None, help="video file to be processed")
     parser.set_defaults(asImg=True)
     args = parser.parse_args(argv)
@@ -382,6 +398,7 @@ def main(argv):
             args.outputfile,
             preproc,
             prefix=args.prefix,
+            format=args.format,
         )
     else:
         read_video_preprocess_save_netcdf(

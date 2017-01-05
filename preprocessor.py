@@ -80,11 +80,19 @@ class DataPreprocessor:
         """
         return self.process_image(*args)
 
-    def process_image(self, image):
+    def process_image(self, image, as_uint=False):
         """
         Main processing pipe.
+        
+        Arguments:
+            - image: a (M,N) (graysacle) or (M,N,3) (RGB) image;
+            - as_uint=False: convert output to valid [0, 255] uint8 images.
+        Return: (img_rect, img_filt)
+            - img_rect: the rectified image
+            - img_filt: the filtered version of img_rect. 
 
         Written by P. DERIAN 2016-03-09
+        Modified by P. DERIAN 2017-01-05: added clipping and int conversion. 
         """
         # first rectify and grid
         img_rect = self.grid_image(image)
@@ -103,7 +111,13 @@ class DataPreprocessor:
                 size=self.param['median_length_px'],
                 mode='reflect',
                 ) # this is the low-pass filter
-        # ...
+        # if as_uint: clip and convert back to uint8
+        if as_uint:
+            numpy.clip(img_rect, 0., 1., img_rect)
+            img_rect = (255.*img_rect).astype('uint8')
+            if img_filt is not None:
+                numpy.clip(img_filt, 0., 1., img_filt)
+                img_filt = (255.*img_filt).astype('uint8')
         return img_rect, img_filt
 
     def grid_image(self, image):
@@ -136,34 +150,90 @@ class DataPreprocessor:
         """
         # load image
         img = skio.imread(imagefile, as_grey=True)
-        imgc = self.grid_image(img)
         # interpolate
-        fig, (ax1, ax2) = pyplot.subplots(1,2)
+        imgc = self.grid_image(img)
+        # create figure
+        dpi = 90.
+        fig, (ax1, ax2) = pyplot.subplots(2,1, figsize=(1000./dpi, 1000./dpi))
         # interpolation boundaries
         xmin, xmax = self.param['xbounds']
         ymin, ymax = self.param['ybounds']
         yxBound = numpy.array([[ymax, xmin], [ymax, xmax], [ymin, xmax], [ymin, xmin]])
         iyxBound = self.projection.inverse(yxBound)
-        # aquapro
+        # aquapro & ADV sensors
         iyxAquapro = numpy.array([[370, 600],]) #pixels
         yxAquapro = self.projection(iyxAquapro)
         iyxADV = numpy.array([[360, 660],]) #pixels
         yxADV = self.projection(iyxADV)
+        iyxRelease = numpy.array([[270, 1175],]) #pixels
+        yxRelease = self.projection(iyxRelease)
+        # 60-m area around sensors
+        y60c = 694098. # reference point
+        x60c = 370325.
+        yx60 = [[y60c-45, x60c-30],
+                [y60c+15, x60c-30],
+                [y60c+15, x60c+30],
+                [y60c-45, x60c+30],
+                ]
+        iyx60 = self.projection.inverse(yx60)
+        # 30-m area around sensors
+        y30c = 694098. # reference point
+        x30c = 370325.
+        yx30 = [[y30c-22.5, x30c-15],
+                [y30c+7.5, x30c-15],
+                [y30c+7.5, x30c+15],
+                [y30c-22.5, x30c+15],
+                ]
+        iyx30 = self.projection.inverse(yx30)
+        # 120x60 m wide area for flash rip
+        y120c = 694090.
+        x120c = 370260.
+        yx120 = [[y120c-45, x120c-20],
+                 [y120c+15, x120c-20],
+                 [y120c+15, x120c+100],
+                 [y120c-45, x120c+100],
+                 ]        
+        iyx120 = self.projection.inverse(yx120)
+        # Averaging area
+        yAvg = 694098.0
+        xAvg = 370325.0
+        rAvg = 1.
         # display
         ax1.set_title('Original')
-        ax1.imshow(img, cmap='gray', interpolation='none')
+        ax1.set_xlabel('i [px]')
+        ax1.set_ylabel('j [px]')
+        ax1.imshow(img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
         # roll to get x,y instead of y, x
-        ax1.add_artist(patches.Polygon(numpy.roll(iyxBound,1,axis=-1), fill=False))
+        ax1.add_artist(patches.Polygon(numpy.roll(iyxBound,1,axis=-1), fill=False, ls='--'))
+        ax1.add_artist(patches.Polygon(numpy.roll(iyx60,1,axis=-1), fill=False, color='purple'))
+        ax1.add_artist(patches.Polygon(numpy.roll(iyx30,1,axis=-1), fill=False, color='orange'))
+        ax1.add_artist(patches.Polygon(numpy.roll(iyx120,1,axis=-1), fill=False, color='c'))
         ax1.plot(iyxAquapro[0,1], iyxAquapro[0,0], '*r')
         ax1.plot(iyxADV[0,1], iyxADV[0,0], '*g')
+        ax1.plot(iyxRelease[0,1], iyxRelease[0,0], '*b')
         ax1.set_xlim(0, img.shape[1])
         ax1.set_ylim(img.shape[0], 0)
         #
-        ax2.set_title('Interpolated, {} m/px'.format(self.param['resolution']))
-        ax2.imshow(imgc, cmap='gray', interpolation='none',
+        ax2.set_title('Rectified, {} m/px'.format(self.param['resolution']))
+        ax2.set_xlabel('x [m] Easting')
+        ax2.set_ylabel('y [m] Northing')
+        ax2.imshow(imgc, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9,
             extent=[self.x[0], self.x[-1], self.y[-1], self.y[0]])
+        # the areas
+        ax2.add_artist(patches.Polygon(numpy.roll(yx60,1,axis=-1), fill=False, color='purple'))
+        ax2.text(x60c, y60c-45., '60x60 m', va='top', ha='center', color='purple')
+        ax2.add_artist(patches.Polygon(numpy.roll(yx30,1,axis=-1), fill=False, color='orange', ls='--'))
+        ax2.text(x30c, y30c-22.5, '30x30 m ?', va='top', ha='center', color='orange')
+        ax2.add_artist(patches.Polygon(numpy.roll(yx120,1,axis=-1), fill=False, color='c'))
+        ax2.text(x120c+40, y120c-45, '120x60 m', va='top', ha='center', color='c')
+        ax2.add_artist(patches.Circle((xAvg, yAvg), radius=rAvg, fill=True, color='teal', alpha=0.75))
+        # the sensors
         ax2.plot(yxAquapro[0,1], yxAquapro[0,0], '*r')
+        ax2.text(yxAquapro[0,1]+1, yxAquapro[0,0]+1, 'Aquapro', va='baseline', ha='left', color='r')
         ax2.plot(yxADV[0,1], yxADV[0,0], '*g')
+        ax2.text(yxADV[0,1]-1, yxADV[0,0]-1, 'ADV', va='baseline', ha='right', color='g')
+        ax2.plot(yxRelease[0,1], yxRelease[0,0], '*b')
+        ax2.text(yxRelease[0,1], yxRelease[0,0]-1.5, 'Release', va='baseline', ha='center', color='b')
         ax2.set_xlim(self.x[0], self.x[-1])
         ax2.set_ylim(self.y[-1], self.y[0])
 
@@ -172,6 +242,7 @@ class DataPreprocessor:
         print 'ADV (x,y) = ({:.0f}, {:.0f}) (px) -> ({:.2f}, {:.2f}) (m)'.format(
             iyxADV[0,1], iyxADV[0,0], yxADV[0,1], yxADV[0,0])
 
+        pyplot.subplots_adjust(left=.07, bottom=.05, right=.97, top=.96)
         pyplot.show()
 
 ### HELPERS ###
@@ -383,18 +454,18 @@ def test_mapping(matfile, H):
 if __name__=="__main__":
 
     ### tests
-    H = DEFAULT_H
-    mappingFile = '../data/GrandPopo_Misc/CoordonneesXY_GPP_20141013.mat'
+    #H = DEFAULT_H
+    #mappingFile = '../data/GrandPopo_Misc/CoordonneesXY_GPP_20141013.mat'
     #H = estimate_H_from_mapping(mappingFile)
     #print numpy.array_repr(H, precision=16)
     #check_H(mappingFile, H)
     #test_mapping(mappingFile, H)
-    test_projection(mappingFile, H, '../data/GrandPopo_Misc/ex_rgb_frame.jpg')
+    #test_projection(mappingFile, H, '../data/GrandPopo_Misc/ex_rgb_frame.jpg')
 
     preprocessor = DataPreprocessor(
         H=DEFAULT_H,
-        xbounds=(370250., 370350.),
-        ybounds=(694050., 694130.),
-        resolution=0.1,
+        xbounds=(370235., 370365.),
+        ybounds=(694040., 694115.),
+        resolution=0.2,
         )
-    #preprocessor.demo("tmp/raw_000.png")
+    preprocessor.demo("resources/sample_frame_release.jpg")
