@@ -50,7 +50,7 @@ def video_info(videofile):
     # because somehow it does not show up the same on different platforms
     if len(infos['format']['tags']['creation_time'])==19:
         time_value = infos['format']['tags']['creation_time']
-        time_pattern = '%Y-%m-%d %H:%M:%S' 
+        time_pattern = '%Y-%m-%d %H:%M:%S'
     elif len(infos['format']['tags']['creation_time'])>19:
         time_value = infos['format']['tags']['creation_time']
         time_pattern = '%Y-%m-%dT%H:%M:%S.%fZ' #not sure whyt the 'T' and 'Z'
@@ -357,38 +357,28 @@ def main(argv):
     # Arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--output", default=None, dest="outputfile", help="netcdf output file / image output directory (with -i, --img)")
-    parser.add_argument("-r", "--radon", default=0., type=float, dest="radon_length", help="[DEPRECATED] length of radon filter in [m]")
+    parser.add_argument("-r", "--res", default=0.1, type=float, dest="resolution", help="grid resolution in [m/px]")
     parser.add_argument("-m", "--median", default=0., type=float, dest="median_length", help="length of median filter in [m]")
     parser.add_argument("--img", dest="asImg", action="store_true", help="export images (default)")
     parser.add_argument("--nc", dest="asImg", action="store_false", help="export NetCDF (legacy)")
     parser.add_argument("-p", "--prefix", default='', dest="prefix", help="output image prefix (with -i, --img)")
     parser.add_argument("-f", "--format", default='jpg', dest="format", help="output image format (with -i, --img)")
+    parser.add_argument("-x", "--xbounds", default=(370295., 370355.), type=float, nargs=2,
+                        dest="x_bounds", help="domain x bounds in [m]")
+    parser.add_argument("-y", "--ybounds", default=(694054., 694113.), type=float, nargs=2,
+                        dest="y_bounds", help="domain y bounds in [m]")
     parser.add_argument("videofile", type=str, default=None, help="video file to be processed")
     parser.set_defaults(asImg=True)
     args = parser.parse_args(argv)
 
-    # Parameters
-    x_UTM = 370325 #sensors
-    y_UTM = 694098
-    #x_UTM = 370260 #flash rip
-    #y_UTM = 694090
-    dim = 60.
-    resolution = .1 #sensors
-    #resolution = .2 #flash rip
-    radon_length = args.radon_length
-    median_length = args.median_length
-    xmin, xmax = x_UTM - dim/2., x_UTM + dim/2. #sensors
-    #xmin, xmax = x_UTM - 20., x_UTM + 100. #flash rip
-    ymin, ymax = y_UTM - 3*dim/4., y_UTM + dim/4.
-
     # Create a preprocessor for images
     preproc = preprocessor.DataPreprocessor(
         H=preprocessor.DEFAULT_H,
-        xbounds=(xmin, xmax),
-        ybounds=(ymin, ymax),
-        resolution=resolution,
-        radon_length=radon_length,
-        median_length=median_length,
+        xbounds=args.x_bounds,
+        ybounds=args.y_bounds,
+        resolution=args.resolution,
+        radon_length=0., #[DEPRECATED]
+        median_length=args.median_length,
         )
 
     # Process file

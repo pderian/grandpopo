@@ -6,22 +6,34 @@ import subprocess
 ROOT_RAWDATA_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Videos'
 ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
 ###
+# Parameters
+#x_UTM = 370325 #sensors
+#y_UTM = 694098
+#x_UTM = 370260 #flash rip
+#y_UTM = 694090
+#dim = 60.
+#resolution = .1 #sensors
+#resolution = .2 #flash rip
+#xmin, xmax = x_UTM - dim/2., x_UTM + dim/2. #sensors
+#xmin, xmax = x_UTM - 20., x_UTM + 100. #flash rip
+#ymin, ymax = y_UTM - 3*dim/4., y_UTM + dim/4.
+
 
 def process_group(pattern, median=0.):
     """Extracts the frames from original videos and preprocess using decoder.py.
-    
+
     Arguments:
         - pattern: the video search pattern, e.g. '20140312/12/*.mp4'.
         - median=0.: the length in [m] of the median filter to apply.
 
     [TODO] add bounds & resolution options.
-    
+
     Written by P. DERIAN 2017-04-05.
     """
     # check subdirectory according to filter options
     subdir = 'median_{}m'.format(int(median)) if median>0 else 'raw'
-    print 'Processing:', subdir 
-    
+    print 'Processing:', subdir
+
     # search for videos matching the pattern
     search = os.path.join(ROOT_RAWDATA_DIR, pattern)
     print 'Search pattern:', search
@@ -50,7 +62,7 @@ def process_group(pattern, median=0.):
             os.makedirs(outdir, 0755)
         # call decoder
         command = ['python', '-u', 'decoder.py',
-                   '--img', 
+                   '--img',
                    '-o', outdir,
                    '-p', prefix,
                    '-f', 'jpg',
@@ -75,11 +87,11 @@ def estim_group(pattern, which='raw', serverPort=9999):
     # get their relative path
     outdirs = []
     for f in flist:
-        # recursively split to extract basename, hour and date                                                                                                                                                                  
+        # recursively split to extract basename, hour and date
         p, fname = os.path.split(f)
         p, hour = os.path.split(p)
         p, date = os.path.split(p)
-        # compute output dir, nc file                                                                                                                                                                                         
+        # compute output dir, nc file
         outdirs.append(os.path.join(root_estim_dir, which, date, hour))
     # remove duplicates
     subsets = set(outdirs)
@@ -88,7 +100,7 @@ def estim_group(pattern, which='raw', serverPort=9999):
 
     # for each subset (= unique output directory)
     for sub in subsets:
-        # create output directory as needed 
+        # create output directory as needed
         if not os.path.exists(sub):
             print 'Creating output directory', sub
             os.makedirs(sub, 0700)
@@ -118,4 +130,4 @@ if __name__=="__main__":
         #estim_group(pattern, which='raw')
         estim_group(pattern, which='median_5')
         #estim_group(pattern, which='radon_5')
-        
+
