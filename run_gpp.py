@@ -3,35 +3,21 @@ import glob
 import os
 import subprocess
 ###
-ROOT_RAWDATA_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Videos'
-ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
+from config import *
 ###
-# Parameters
-#x_UTM = 370325 #sensors
-#y_UTM = 694098
-#x_UTM = 370260 #flash rip
-#y_UTM = 694090
-#dim = 60.
-#resolution = .1 #sensors
-#resolution = .2 #flash rip
-#xmin, xmax = x_UTM - dim/2., x_UTM + dim/2. #sensors
-#xmin, xmax = x_UTM - 20., x_UTM + 100. #flash rip
-#ymin, ymax = y_UTM - 3*dim/4., y_UTM + dim/4.
 
-
-def process_group(pattern, median=0.):
+def process_group(pattern, params):
     """Extracts the frames from original videos and preprocess using decoder.py.
 
     Arguments:
         - pattern: the video search pattern, e.g. '20140312/12/*.mp4'.
-        - median=0.: the length in [m] of the median filter to apply.
-
-    [TODO] add bounds & resolution options.
+        - params: dict of parameters for the preprocessing.
 
     Written by P. DERIAN 2017-04-05.
     """
     # check subdirectory according to filter options
-    subdir = 'median_{}m'.format(int(median)) if median>0 else 'raw'
+    subdir = params['label']
+    # and the parameters label
     print 'Processing:', subdir
 
     # search for videos matching the pattern
@@ -50,7 +36,7 @@ def process_group(pattern, median=0.):
         minute, _ = os.path.splitext(fname)
          # compute output dir, and prefix for frames
         outdir = os.path.join(ROOT_PREPROC_DIR,
-                              subdir, # according to filter option
+                              subdir, # according to parameters
                               date,
                               '{}_{}'.format(date, hour),
                               '{}_{}{}'.format(date, hour, minute),
@@ -65,8 +51,12 @@ def process_group(pattern, median=0.):
                    '--img',
                    '-o', outdir,
                    '-p', prefix,
-                   '-f', 'jpg',
-                   '-m', str(median),
+                   '-l', params['label'],
+                   '-f', str(params['image_format']),
+                   '-m', str(params['median_length']),
+                   '-r', str(params['resolution']),
+                   '-x', str(params['x_bounds'][0]), str(params['x_bounds'][1]),
+                   '-y', str(params['y_bounds'][0]), str(params['y_bounds'][1]),
                    f,
                    ]
         subprocess.call(command)
@@ -122,9 +112,14 @@ if __name__=="__main__":
     action = 'decoder'
 
     if action=='decoder':
-        #pattern = '20140312/12/*.mp4' #flash rip
+        # the area centered over sensors
         pattern = '20140313/15/00.mp4' #sensors
-        process_group(pattern, median=5)
+        process_group(pattern, params=PARAMS_COMP60)
+        process_group(pattern, params=PARAMS_COMP30)
+        # the wide field for flash rip monitoring
+        #pattern = '20140312/12/*.mp4' #flash rip
+        #process_group(pattern, params=PARAMS_RIP120)
+   
     elif action=='estimator':
         pattern = '20140312/12/*.nc'
         #estim_group(pattern, which='raw')

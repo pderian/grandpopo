@@ -17,12 +17,11 @@ import numpy
 import skimage.color as skcolor
 import skimage.io as skio
 ###
+from config import *
 import preprocessor
 ###
-# this is the time unit used in NetCDF files
+# [DEPRECATED] this is the time unit used in NetCDF files
 DEFAULT_NC_TIME_UNIT = 'days since 2014-01-01 00:00:00'
-# this is the directory where ffmpeg & co are installed, since libav sucks ass.
-FFMPEG_DIR = '/opt/local/bin' #'ffmpeg/ffmpeg-git-20160511-64bit-static'
 
 #### FRAMES INPUT ####
 ######################
@@ -123,7 +122,7 @@ def read_img_preprocess_save_img(inputfile, outputfile, preprocessor, verbose=Tr
 
 def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix='',
                                    verbose=True, workers=None, RGB=False, cmap='gray',
-                                   format='png'):
+                                   format='png', label=''):
     """
     Read frames from the video file, preprocess and save as regular image(s).
 
@@ -179,7 +178,6 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
     filtfiles = []
     for i, images in enumerate(processed_frames):
         img_rect, img_filt = images
-        print img_rect.dtype, img_rect.min(), img_rect.max()
         # save the rectified version
         basename = 'src_{}{:03d}.{}'.format(prefix, i, format)
         outputfile = os.path.join(outputdir, basename)
@@ -203,10 +201,12 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
                 # source data
                 'sourceVideo': os.path.basename(data['info']['file']),
                 'numberFrame': data['info']['nb_frames'],
+                'label': label,
                 # output data
-                'imageFormat':format,
+                'imageFormat': format,
                 'sourceImages': srcfiles,
                 'filteredImages': filtfiles,
+                'prefix': prefix,
                 # time info
                 'startTime': data['info']['creation_time'].strftime('%Y-%m-%d %H:%M:%S'),
                 'frameTimestamps': data['info']['timestamp'],
@@ -227,7 +227,7 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
     print 'wrote {}'.format(jsonfile)
 
 def read_video_preprocess_save_netcdf(inputfile, outputfile, preprocessor, verbose=True, workers=None):
-    """
+    """ [DEPRECATED]
     """
     ### load image data
     if verbose:
@@ -362,6 +362,7 @@ def main(argv):
     parser.add_argument("--img", dest="asImg", action="store_true", help="export images (default)")
     parser.add_argument("--nc", dest="asImg", action="store_false", help="export NetCDF (legacy)")
     parser.add_argument("-p", "--prefix", default='', dest="prefix", help="output image prefix (with -i, --img)")
+    parser.add_argument("-l", "--label", default='', dest="label", help="output dataset label (with -i, --img)")
     parser.add_argument("-f", "--format", default='jpg', dest="format", help="output image format (with -i, --img)")
     parser.add_argument("-x", "--xbounds", default=(370295., 370355.), type=float, nargs=2,
                         dest="x_bounds", help="domain x bounds in [m]")
@@ -389,6 +390,7 @@ def main(argv):
             preproc,
             prefix=args.prefix,
             format=args.format,
+            label=args.label,
         )
     else:
         read_video_preprocess_save_netcdf(
