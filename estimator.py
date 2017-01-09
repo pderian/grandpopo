@@ -405,7 +405,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
     ###############
     if outputdir is not None:
         basename, _ = os.path.splitext(os.path.basename(infofile))
-        outputfile = os.path.join(outputdir, '{}_{}_probe.json'.format(
+        outputfile = os.path.join(outputdir, '{}_{}probe.json'.format(
             jsondata['label'], jsondata['prefix']))
         with open(outputfile, 'w') as f:
             json.dump(result, f, indent=0)
