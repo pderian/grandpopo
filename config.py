@@ -2,6 +2,10 @@
 
 Written by P. DERIAN 2017-01-06.
 """
+###
+import numpy
+###
+
 ### Path
 ROOT_RAWDATA_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Videos'
 ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
@@ -10,31 +14,44 @@ FFMPEG_DIR = '/opt/local/bin' #'ffmpeg/ffmpeg-git-20160511-64bit-static'
 
 ### Case parameters
 PARAMS_COMP60 = {
-    # Parameters for the 60x60 m area covering the ADV/Aquapro sensors
+    # Parameters for the 60x60 m area covering the ADV/Aquapro sensors (TGRS paper)
     'label': 'timeseries_60m', #a label for the frame directory
     'image_format': 'jpg', #format of output images
     'median_length': 5., #length of median filter in [m]
     'resolution': 0.1, #[m/px]
-    'x_bounds': (370295., 370355.), # x (easting) domain bounds in [m]
-    'y_bounds': (694053., 694113.), # y (northing) domain bounds in [m]
+    'origin': (370295., 694053.), # origin (x,y) easting, northing of the domain in [m]
+    'dimensions': (60., 60.), # domain size in [m]
+    'rotation': 0., # domain rotation in [degree] around origin
     }
 PARAMS_COMP30 = {
-    # Parameters for the 30x30 m area covering the ADV/Aquapro sensors
+    # Parameters for the 30x30 m area covering the ADV/Aquapro sensors (TGRS paper)
     'label': 'timeseries_30m', #a label for the frame directory
     'image_format': 'jpg', #format of output images
     'median_length': 5., #length of median filter in [m]
     'resolution': 0.1, #[m/px]
-    'x_bounds': (370310., 370340.), # x (easting) domain bounds in [m]
-    'y_bounds': (694075.5, 694105.5), # y (northing) domain bounds in [m]
+    'origin': (370310., 694075.5), # origin (x,y) easting, northing of the domain in [m]
+    'dimensions': (30., 30.), # domain size in [m]
+    'rotation': 0., # domain rotation in [degree] around origin
     }
 PARAMS_RIP120 = {
-    # Parameters for the 120x60 m area covering the dye release
+    # Parameters for the 120x60 m area covering the dye release (TGRS paper)
     'label': 'flashrip_120m',
     'image_format': 'jpg', #format of output images
     'median_length': 5., #length of median filter in [m]
     'resolution': 0.2, #[m/px]
-    'x_bounds': (370240., 370360.), # x (easting) domain bounds in [m]
-    'y_bounds': (694045., 694105.), # y (northing) domain bounds in [m]
+    'origin': (370240., 694045.), # origin (x,y) easting, northing of the domain in [m]
+    'dimensions': (120., 60.), # domain size in [m]
+    'rotation': 0., # domain rotation in [degree] around origin
+    }
+PARAMS_SWASH125 = {
+    # Parameters for the 125x45 m area covering most of the swash zone (Coastal Dyn paper)
+    'label': 'swash_125m',
+    'image_format': 'jpg', #format of output images
+    'median_length': 5., #length of median filter in [m]
+    'resolution': 0.1, #[m/px]
+    'origin': (370240., 694050.), # origin (x,y) easting, northing of the domain in [m]
+    'dimensions': (125., 45.), # domain size in [m]
+    'rotation': -10., # domain rotation in [degree] around origin
     }
 
 ### Averaging probe for time-series
@@ -55,3 +72,19 @@ DEFAULT_H = [
     [3.5719691693753153e-03, 9.7256605585734505e-05,
      -3.2313166347066136e-01]
     ]
+
+### Helpers
+def domain_grid(origin, dimensions, rotation, resolution):
+    """Reference function for the generation of the domain grid from the origin, dimensions
+    rotation and resolution parameters.
+
+    Written by P. DERIAN 2017-01-11.
+    """
+    x = numpy.arange(0., dimensions[0], step=resolution,) # 1d
+    y = numpy.arange(0., dimensions[1], step=resolution,) # 1d
+    X, Y = numpy.meshgrid(x, y) # 2d
+    cos_theta = numpy.cos(numpy.deg2rad(rotation))
+    sin_theta = numpy.sin(numpy.deg2rad(rotation))
+    Xr = cos_theta*X + sin_theta*Y + origin[0] #apply rotation
+    Yr = -sin_theta*X + cos_theta*Y + origin[1]
+    return Xr, Yr

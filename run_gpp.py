@@ -48,16 +48,16 @@ def process_group(pattern, params):
             os.makedirs(outdir, 0755)
         # call decoder
         command = ['python', '-u', 'decoder.py',
-                   '--img',
+                   f,
                    '-o', outdir,
                    '-p', prefix,
                    '-l', params['label'],
                    '-f', str(params['image_format']),
                    '-m', str(params['median_length']),
                    '-r', str(params['resolution']),
-                   '-x', str(params['x_bounds'][0]), str(params['x_bounds'][1]),
-                   '-y', str(params['y_bounds'][0]), str(params['y_bounds'][1]),
-                   f,
+                   '-O', str(params['origin'][0]), str(params['origin'][1]),
+                   '-d', str(params['dimensions'][0]), str(params['dimensions'][1]),
+                   '-a', str(params['rotation']),
                    ]
         subprocess.call(command)
 
@@ -112,14 +112,17 @@ if __name__=="__main__":
     action = 'decoder'
 
     if action=='decoder':
-        # the area centered over sensors
-        pattern = '20140313/15/00.mp4' #sensors
-        process_group(pattern, params=PARAMS_COMP60)
+        # the area centered over sensors (TGRS paper)
+        pattern = '20140313/06/30.mp4' #sensors
+        #process_group(pattern, params=PARAMS_COMP60)
         process_group(pattern, params=PARAMS_COMP30)
-        # the wide field for flash rip monitoring
+        # the wide field for flash rip monitoring (TGRS paper)
         #pattern = '20140312/12/*.mp4' #flash rip
         #process_group(pattern, params=PARAMS_RIP120)
-   
+        # the wide field for swash (COASTAL DYN paper)
+        #pattern = '20140313/06/30.mp4' # [TMP]
+        #process_group(pattern, params=PARAMS_SWASH125)
+
     elif action=='estimator':
         pattern = '20140312/12/*.nc'
         #estim_group(pattern, which='raw')

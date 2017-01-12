@@ -25,13 +25,14 @@ class DataPreprocessor:
         """
         Expected keywords:
             H: 3x3 homography (projection) matrix.
-            xbounds: (xmin, xmax) the x (horizontal) domain of interest in [meter].
-            ybounds: (ymin, ymax) the y (vertical) domain of interest in [meter].
+            origin: (x0, y0) the origin in [meter]
+            dimensions: (xdim, ydim) the domain size in [meter]
+            rotation: the rotation angle of the grid around (x0, y0) in [degree]
             resolution: the grid resolution in [meter].
             radon_length: the length of the radon filter, in [meter]. None or 0 skip the filtering
 
         Written by P. DERIAN 2016-01-23
-        Modified by P. DERIAN 2016-03-09: added radon transform capability
+        Modified by P. DERIAN 2017-01-11: added domain rotation
         """
         ### Store parameters
         self.param = kwargs
@@ -49,17 +50,12 @@ class DataPreprocessor:
         self.H = numpy.array(self.param['H'])
         self.projection = sktransform.ProjectiveTransform(self.H)
         ### Real world interpolation coordinates
-        self.x = numpy.arange(self.param['xbounds'][0], self.param['xbounds'][1],
-                               step=self.param['resolution'],
-                               ) # 1d
-        self.y = numpy.arange(self.param['ybounds'][0], self.param['ybounds'][1],
-                               step=self.param['resolution'],
-                               ) # 1d
-        self.shape = (self.y.size, self.x.size) # shape of the gridded data
-        X, Y = numpy.meshgrid(self.x, self.y) # 2d
-        YX = numpy.hstack((Y.ravel().reshape((-1,1)),
-                           X.ravel().reshape((-1,1)),
+        self.X, self.Y = domain_grid(self.param['origin'], self.param['dimensions'],
+                                     self.param['rotation'], self.param['resolution'])
+        YX = numpy.hstack((self.Y.ravel().reshape((-1,1)),
+                           self.X.ravel().reshape((-1,1)),
                            )) # interpolation coordinates
+        self.shape = self.X.shape # this is the grid shape
         ### Image interpolation coordinates
         self.iYX = self.projection.inverse(YX)
 
@@ -74,16 +70,16 @@ class DataPreprocessor:
     def process_image(self, image, as_uint=False):
         """
         Main processing pipe.
-        
+
         Arguments:
             - image: a (M,N) (graysacle) or (M,N,3) (RGB) image;
             - as_uint=False: convert output to valid [0, 255] uint8 images.
         Return: (img_rect, img_filt)
             - img_rect: the rectified image
-            - img_filt: the filtered version of img_rect. 
+            - img_filt: the filtered version of img_rect.
 
         Written by P. DERIAN 2016-03-09
-        Modified by P. DERIAN 2017-01-05: added clipping and int conversion. 
+        Modified by P. DERIAN 2017-01-05: added clipping and int conversion.
         """
         # first rectify and grid
         img_rect = self.grid_image(image)
@@ -139,21 +135,23 @@ class DataPreprocessor:
         Arguments:
             imagefile: path to an image to be processed
         """
+        def get_yx_polygon(X, Y):
+            return numpy.array([[Y[iy, ix], X[iy, ix]]
+                               for [iy, ix] in zip([0,-1,-1,0], [0,0,-1,-1])])
+
         # load image
         img = skio.imread(imagefile, as_grey=True)
         # interpolate
         imgc = self.grid_image(img)
-        
+
         # create figure
         dpi = 90.
         fig, (ax1, ax2) = pyplot.subplots(2,1, figsize=(1000./dpi, 1000./dpi))
-        
+
         # interpolation boundaries
-        xmin, xmax = self.param['xbounds']
-        ymin, ymax = self.param['ybounds']
-        yxBound = numpy.array([[ymax, xmin], [ymax, xmax], [ymin, xmax], [ymin, xmin]])
+        yxBound = get_yx_polygon(self.X, self.Y)
         iyxBound = self.projection.inverse(yxBound)
-        
+
         # aquapro & ADV sensors
         iyxAquapro = numpy.array([[370, 600],]) #pixels
         yxAquapro = self.projection(iyxAquapro)
@@ -161,29 +159,42 @@ class DataPreprocessor:
         yxADV = self.projection(iyxADV)
         iyxRelease = numpy.array([[270, 1175],]) #pixels
         yxRelease = self.projection(iyxRelease)
-        
+
         # 60-m estimation area around sensors
-        def get_yx_polygon(xbounds, ybounds):
-            return [[ybounds[iy], xbounds[ix]]
-                    for iy, ix in zip([0,1,1,0], [0,0,1,1])]
-        yx60 = get_yx_polygon(PARAMS_COMP60['x_bounds'], PARAMS_COMP60['y_bounds']) # world coord        
+        X60, Y60 = domain_grid(PARAMS_COMP60['origin'], PARAMS_COMP60['dimensions'],
+                               PARAMS_COMP60['rotation'], PARAMS_COMP60['resolution'])
+        yx60 = get_yx_polygon(X60, Y60)
         iyx60 = self.projection.inverse(yx60) # pixel coords
-        y60_label = PARAMS_COMP60['y_bounds'][0] # world coord for the text label
-        x60_label = numpy.mean(PARAMS_COMP60['x_bounds'])
+        y60_label = yx60[:,0].min() # world coord for the text label
+        x60_label = yx60[:,1].mean()
         area60_color = 'purple'
         # 30-m area around sensors
-        yx30 = get_yx_polygon(PARAMS_COMP30['x_bounds'], PARAMS_COMP30['y_bounds'])         
+        X30, Y30 = domain_grid(PARAMS_COMP30['origin'], PARAMS_COMP30['dimensions'],
+                               PARAMS_COMP30['rotation'], PARAMS_COMP30['resolution'])
+        yx30 = get_yx_polygon(X30, Y30)
         iyx30 = self.projection.inverse(yx30) # pixel coords
-        y30_label = PARAMS_COMP30['y_bounds'][0] # world coord for the text label
-        x30_label = numpy.mean(PARAMS_COMP30['x_bounds'])
+        y30_label = yx30[:,0].min() # world coord for the text label
+        x30_label = yx30[:,1].mean()
         area30_color = 'orange'
         # 120x60 m wide area for flash rip
-        yx120 = get_yx_polygon(PARAMS_RIP120['x_bounds'], PARAMS_RIP120['y_bounds'])         
+        X120, Y120 = domain_grid(PARAMS_RIP120['origin'], PARAMS_RIP120['dimensions'],
+                                 PARAMS_RIP120['rotation'], PARAMS_RIP120['resolution'])
+        yx120 = get_yx_polygon(X120, Y120)
         iyx120 = self.projection.inverse(yx120) # pixel coords
-        y120_label = PARAMS_RIP120['y_bounds'][0] # world coord for the text label
-        x120_label = numpy.mean(PARAMS_RIP120['x_bounds'])
+        y120_label = yx120[:,0].min() # world coord for the text label
+        x120_label = yx120[:,1].mean()
         area120_color = 'c'
- 
+        #
+        X125, Y125 = domain_grid(PARAMS_SWASH125['origin'], PARAMS_SWASH125['dimensions'],
+                                 PARAMS_SWASH125['rotation'], PARAMS_SWASH125['resolution'])
+        yx125 = get_yx_polygon(X125, Y125)
+        iyx125 = self.projection.inverse(yx125) # pixel coords
+        y125_label = Y125[0,:].mean() # world coord for the text label
+        x125_label = yx125[:,1].mean()
+        area125_color = 'pink'
+        print yx125
+        print yx120
+
         # display
         ax1.set_title('Original')
         ax1.set_xlabel('i [px]')
@@ -194,24 +205,27 @@ class DataPreprocessor:
         ax1.add_artist(patches.Polygon(numpy.roll(iyx60,1,axis=-1), fill=False, color=area60_color))
         ax1.add_artist(patches.Polygon(numpy.roll(iyx30,1,axis=-1), fill=False, color=area30_color))
         ax1.add_artist(patches.Polygon(numpy.roll(iyx120,1,axis=-1), fill=False, color=area120_color))
+        ax1.add_artist(patches.Polygon(numpy.roll(iyx125,1,axis=-1), fill=False, color=area125_color))
         ax1.plot(iyxAquapro[0,1], iyxAquapro[0,0], '*r')
         ax1.plot(iyxADV[0,1], iyxADV[0,0], '*g')
         ax1.plot(iyxRelease[0,1], iyxRelease[0,0], '*b')
         ax1.set_xlim(0, img.shape[1])
         ax1.set_ylim(img.shape[0], 0)
         #
+        ax2.set_aspect('equal')
         ax2.set_title('Rectified, {} m/px'.format(self.param['resolution']))
-        ax2.set_xlabel('x [m] Easting')
-        ax2.set_ylabel('y [m] Northing')
-        ax2.imshow(imgc, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9,
-            extent=[self.x[0], self.x[-1], self.y[-1], self.y[0]])
+        ax2.set_xlabel('Easting x [m]')
+        ax2.set_ylabel('Northing y [m]')
+        ax2.pcolormesh(self.X, self.Y, imgc, cmap='gray')
         # the areas
         ax2.add_artist(patches.Polygon(numpy.roll(yx60,1,axis=-1), fill=False, color=area60_color))
-        ax2.text(x60_label, y60_label, '60x60 m', va='top', ha='center', color=area60_color)
-        ax2.add_artist(patches.Polygon(numpy.roll(yx30,1,axis=-1), fill=False, color=area30_color, ls='--'))
-        ax2.text(x30_label, y30_label, '30x30 m ?', va='top', ha='center', color=area30_color)
+        ax2.text(x60_label, y60_label, 'TGRS(1) 60x60 m', va='top', ha='center', color=area60_color)
+        ax2.add_artist(patches.Polygon(numpy.roll(yx30,1,axis=-1), fill=False, color=area30_color))
+        ax2.text(x30_label, y30_label, 'TGRS(2) 30x30 m', va='top', ha='center', color=area30_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx120,1,axis=-1), fill=False, color=area120_color))
-        ax2.text(x120_label, y120_label, '120x60 m', va='top', ha='center', color=area120_color)
+        ax2.text(x120_label, y120_label, 'TGRS(1,2) 120x60 m', va='top', ha='center', color=area120_color)
+        ax2.add_artist(patches.Polygon(numpy.roll(yx125,1,axis=-1), fill=False, color=area125_color))
+        ax2.text(x125_label, y125_label, 'COASTDYN 125x45 m', va='top', ha='center', color=area125_color)
         ax2.add_artist(
             patches.Circle((AVG_PROBE['x'], AVG_PROBE['y']), radius=AVG_PROBE['r'],
                            fill=True, color='teal', alpha=0.75),
@@ -223,8 +237,9 @@ class DataPreprocessor:
         ax2.text(yxADV[0,1]-1, yxADV[0,0]-1, 'ADV', va='baseline', ha='right', color='g')
         ax2.plot(yxRelease[0,1], yxRelease[0,0], '*b')
         ax2.text(yxRelease[0,1], yxRelease[0,0]-1.5, 'Release', va='baseline', ha='center', color='b')
-        ax2.set_xlim(self.x[0], self.x[-1])
-        ax2.set_ylim(self.y[-1], self.y[0])
+        #
+        ax2.set_xlim(yxBound[:,1].min(), yxBound[:,1].max())
+        ax2.set_ylim(yxBound[:,0].min(), yxBound[:,0].max())
 
         print 'Aquapro (x,y) = ({:.0f}, {:.0f}) (px) -> ({:.2f}, {:.2f}) (m)'.format(
             iyxAquapro[0,1], iyxAquapro[0,0], yxAquapro[0,1], yxAquapro[0,0])
@@ -456,9 +471,10 @@ if __name__=="__main__":
 
     preprocessor = DataPreprocessor(
         H=DEFAULT_H,
-        xbounds=(370235., 370365.),
-        ybounds=(694040., 694115.),
+        origin=(370235., 694040.),
+        dimensions=(130., 75.),
+        rotation=0.,
         resolution=0.2,
         )
     preprocessor.demo("resources/sample_frame_release.jpg",
-                      "resources/grandpopo_config.jpg")
+                      "resources/grandpopo_config_rotation.jpg")

@@ -20,8 +20,6 @@ import skimage.io as skio
 from config import *
 import preprocessor
 ###
-# [DEPRECATED] this is the time unit used in NetCDF files
-DEFAULT_NC_TIME_UNIT = 'days since 2014-01-01 00:00:00'
 
 #### FRAMES INPUT ####
 ######################
@@ -108,9 +106,8 @@ def load_keyframes(videofile, verbose=False):
     pipe.terminate()
     return {'frames':frames, 'info':info}
 
-### HELPERS ###
-###############
-
+### PROCESSING FUNCTIONS ###
+############################
 def read_img_preprocess_save_img(inputfile, outputfile, preprocessor, verbose=True):
     """
     Preprocess the given image and save as a gray image
@@ -128,6 +125,7 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
 
     Written by P. DERIAN 2016-08-17
     Updated by P. DERIAN 2017-01-04: added json info output.
+    Updated by P. DERIAN 2017-01-12: added grid rotation support.
     """
     ### load image data
     if verbose:
@@ -197,7 +195,7 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
                 'author': 'Pierre DERIAN',
                 'website': 'www.pierrederian.net',
                 'createdBy': __file__,
-                'description': 'Metadata for the frames extracted from video file and pre-processed. Resolution is in [m/px]; xBounds and yBounds in [m] UTM.',
+                'description': 'Metadata for the frames extracted from video file and pre-processed. Resolution is in [m/px]',
                 # source data
                 'sourceVideo': os.path.basename(data['info']['file']),
                 'numberFrame': data['info']['nb_frames'],
@@ -211,11 +209,12 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
                 'startTime': data['info']['creation_time'].strftime('%Y-%m-%d %H:%M:%S'),
                 'frameTimestamps': data['info']['timestamp'],
                 # domain info
-                'resolution': preprocessor.param['resolution'],
-                'xDimPx': preprocessor.x.size,
-                'yDimPx': preprocessor.y.size,
-                'xBoundsUTM': preprocessor.param['xbounds'],
-                'yBoundsUTM': preprocessor.param['ybounds'],
+                'width': preprocessor.shape[1],
+                'height': preprocessor.shape[0],
+                'gridResolution': preprocessor.param['resolution'],
+                'gridOrigin': preprocessor.param['origin'],
+                'gridDimensions': preprocessor.param['dimensions'],
+                'gridRotation': preprocessor.param['rotation'],
                 # filters
                 'medianLengthPx': preprocessor.param['median_length_px'],
                 # projection matrix
@@ -226,178 +225,51 @@ def read_video_preprocess_save_img(inputfile, outputdir, preprocessor, prefix=''
         json.dump(jsondata, f, indent=0)
     print 'wrote {}'.format(jsonfile)
 
-def read_video_preprocess_save_netcdf(inputfile, outputfile, preprocessor, verbose=True, workers=None):
-    """ [DEPRECATED]
-    """
-    ### load image data
-    if verbose:
-        print 'File', inputfile
-        print '\tloading data...'
-    data = load_keyframes(inputfile, verbose=verbose)
-
-    ### for each frame
-    if verbose:
-        print '\tprocessing...'
-        sys.stdout.flush
-    # allocate output
-    src_frames = numpy.empty((len(data['frames']), preprocessor.y.size, preprocessor.x.size))
-    filt_frames = numpy.empty((len(data['frames']), preprocessor.y.size, preprocessor.x.size))
-    # create pool
-    os.system("taskset -p 0xff %d" % os.getpid()) #see http://stackoverflow.com/questions/15639779/why-does-multiprocessing-use-only-a-single-core-after-i-import-numpy
-    pool = multiprocessing.Pool(workers, maxtasksperchild=10)
-    # create iterator
-    def iterator(N, disp_progress=0):
-        n = 0
-        while n<N:
-            # yield a greyscale version of the frame
-            #yield (skcolor.rgb2grey(data['frames'][n]),)
-            # yield the red layer
-            yield (data['frames'][n][:,:,0]/255.,)
-            if disp_progress and (not (n+1)%disp_progress):
-                print '{} {:6.2f}%  (iter {})'.format(time.ctime(), 100.*(n+1.)/N, n+1)
-            n += 1
-    # process
-    tic = time.time()
-    result = pool.imap(
-        preprocessor,
-        iterator(N=len(data['frames']), disp_progress=10),
-        chunksize=1,
-        )
-    pool.close()
-    pool.join()
-    # retrieve results
-    for n, r in enumerate(result):
-        src_img, filt_img = r
-        processed_frames[n] = src_img - filt_img
-    toc = time.time()
-    print 'done - {:.2f} s'.format(toc-tic)
-
-    ### create NetCDF file
-    if outputfile is None:
-        path, _ = os.path.splitext(inputfile)
-        outputfile = path + '.nc'
-    if verbose:
-        print '\tcreating NetCDf', outputfile
-    fdtype = numpy.dtype('float32') # this data type is used to convert to the desired precision
-
-    ### root group
-    # root contains all the main data
-    rootgroup = netCDF4.Dataset(outputfile, 'w', format='NETCDF4')
-    # create dimensions
-    tDim = rootgroup.createDimension('t', 1)
-    dtDim = rootgroup.createDimension('dt', processed_frames.shape[0])
-    xDim = rootgroup.createDimension('x', processed_frames.shape[2])
-    yDim = rootgroup.createDimension('y', processed_frames.shape[1])
-    # create variables
-    tVar = rootgroup.createVariable('t', 'f8', 't') #note this one has 'f8' (double precision)
-    dtVar = rootgroup.createVariable('dt', 'f4', 'dt')
-    xVar = rootgroup.createVariable('x', 'f4', 'x')
-    yVar = rootgroup.createVariable('y', 'f4', 'y')
-    imgVar = rootgroup.createVariable('img', 'f4', ('dt', 'y', 'x'))
-    # set variable attributes
-    tVar.units = DEFAULT_NC_TIME_UNIT
-    tVar.description = 'date and time of the beginning of the video'
-    dtVar.units = 'seconds'
-    dtVar.description = 'timestamp of frames from the beginning of the video'
-    xVar.units = 'meters'
-    xVar.description = 'UTM eastern (x) coordinates of grid points'
-    yVar.units = 'meters'
-    yVar.description = 'UTM northern (y) coordinates of grid points'
-    imgVar.units = 'luminance'
-    imgVar.description = 'stack preprocessed and rectified data'
-    # set global attributes
-    rootgroup.author = 'Pierre Derian - contact@pierrederian.net'
-    rootgroup.date_created = str(datetime.datetime.now())
-    rootgroup.how_created = 'Created by {}'.format(__file__)
-    rootgroup.description = 'This NetCDf archive contains data from the GrandPopo measurement campaign. Frames were extracted from the videofiles using "ffmpeg", preprocessed and rectified.',
-    rootgroup.source_video = inputfile
-    # fill data
-    tVar[:] = netCDF4.date2num(data['info']['creation_time'], DEFAULT_NC_TIME_UNIT)
-    dtVar[:] = numpy.array(data['info']['timestamp'], dtype=fdtype)
-    xVar[:] = preprocessor.x.astype(fdtype)
-    yVar[:] = preprocessor.y.astype(fdtype)
-    imgVar[:] = processed_frames.astype(fdtype)
-    ### preprocess group
-    preprocgroup = rootgroup.createGroup('preprocess')
-    # create dimensions
-    hdim = preprocgroup.createDimension('h', 3)
-    # create variables
-    hVar = preprocgroup.createVariable('H', 'f8', ('h', 'h'))
-    resVar = preprocgroup.createVariable('resolution', 'f4')
-    radonVar = preprocgroup.createVariable('radon_length', 'f4')
-    radonpxVar = preprocgroup.createVariable('radon_length_px', 'i4')
-    medianVar = preprocgroup.createVariable('median_length', 'f4')
-    medianpxVar = preprocgroup.createVariable('median_length_px', 'i4')
-    # set attributes
-    preprocgroup.description = 'Preprocessing parameters for the "img" data.'
-    resVar.units = 'meters'
-    resVar.description = 'resolution used for image rectification.'
-    radonVar.units = 'meters'
-    radonVar.description = 'physical length of the radon filter (0=disabled).'
-    radonpxVar.units = 'pixels'
-    radonpxVar.description = 'numerical length of the radon filter.'
-    medianVar.units = 'meters'
-    medianVar.description = 'physical length of the median filter (0=disabled).'
-    medianpxVar.units = 'pixels'
-    medianpxVar.description = 'numerical length of the median filter.'
-    hVar.description = 'Matrix of the projective transform used for the rectification.'
-    # set variables
-    hVar[:] = preprocessor.H
-    resVar[:] = preprocessor.param['resolution']
-    radonVar[:] = preprocessor.param['radon_length']
-    radonpxVar[:] = preprocessor.param['radon_length_px']
-    medianVar[:] = preprocessor.param['median_length']
-    medianpxVar[:] = preprocessor.param['median_length_px']
-    ### end
-    rootgroup.close()
-
 ### MAIN ####
 #############
 def main(argv):
     # Arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-o", "--output", default=None, dest="outputfile", help="netcdf output file / image output directory (with -i, --img)")
-    parser.add_argument("-r", "--res", default=0.1, type=float, dest="resolution", help="grid resolution in [m/px]")
-    parser.add_argument("-m", "--median", default=0., type=float, dest="median_length", help="length of median filter in [m]")
-    parser.add_argument("--img", dest="asImg", action="store_true", help="export images (default)")
-    parser.add_argument("--nc", dest="asImg", action="store_false", help="export NetCDF (legacy)")
-    parser.add_argument("-p", "--prefix", default='', dest="prefix", help="output image prefix (with -i, --img)")
-    parser.add_argument("-l", "--label", default='', dest="label", help="output dataset label (with -i, --img)")
-    parser.add_argument("-f", "--format", default='jpg', dest="format", help="output image format (with -i, --img)")
-    parser.add_argument("-x", "--xbounds", default=(370295., 370355.), type=float, nargs=2,
-                        dest="x_bounds", help="domain x bounds in [m]")
-    parser.add_argument("-y", "--ybounds", default=(694054., 694113.), type=float, nargs=2,
-                        dest="y_bounds", help="domain y bounds in [m]")
-    parser.add_argument("videofile", type=str, default=None, help="video file to be processed")
-    parser.set_defaults(asImg=True)
+    parser.add_argument("-o", "--output", default=None, dest="outputfile",
+                        help="netcdf output file / image output directory (with -i, --img)")
+    parser.add_argument("-m", "--median", default=0., type=float, dest="median_length",
+                        help="length of median filter in [m]")
+    parser.add_argument("-p", "--prefix", default='', dest="prefix",
+                        help="output image prefix (with -i, --img)")
+    parser.add_argument("-l", "--label", default='', dest="label",
+                        help="output dataset label (with -i, --img)")
+    parser.add_argument("-f", "--format", default='jpg', dest="format",
+                        help="output image format (with -i, --img)")
+    parser.add_argument("-O", "--origin", default=(370310., 694075.5), type=float, nargs=2,
+                         dest="grid_origin", help="domain origin (x, y) in [m]")
+    parser.add_argument("-d", "--dimensions", default=(30., 30.), type=float, nargs=2,
+                         dest="grid_dimensions", help="domain dimensions (dim_x, dim_y) in [m]")
+    parser.add_argument("-a", "--angle", default=0., type=float, dest="grid_rotation",
+                        help="grid rotation around the origin in [degree]")
+    parser.add_argument("-r", "--res", default=0.1, type=float, dest="grid_resolution",
+                        help="grid resolution in [m/px]")
+    parser.add_argument("videofile", type=str, help="video file to be processed")
     args = parser.parse_args(argv)
 
     # Create a preprocessor for images
     preproc = preprocessor.DataPreprocessor(
         H=preprocessor.DEFAULT_H,
-        xbounds=args.x_bounds,
-        ybounds=args.y_bounds,
-        resolution=args.resolution,
-        radon_length=0., #[DEPRECATED]
+        resolution=args.grid_resolution,
+        origin=args.grid_origin,
+        dimensions=args.grid_dimensions,
+        rotation=args.grid_rotation,
         median_length=args.median_length,
         )
 
     # Process file
-    if args.asImg:
-        read_video_preprocess_save_img(
-            args.videofile,
-            args.outputfile,
-            preproc,
-            prefix=args.prefix,
-            format=args.format,
-            label=args.label,
-        )
-    else:
-        read_video_preprocess_save_netcdf(
-            args.videofile,
-            args.outputfile,
-            preproc,
-        )
+    read_video_preprocess_save_img(
+        args.videofile,
+        args.outputfile,
+        preproc,
+        prefix=args.prefix,
+        format=args.format,
+        label=args.label,
+    )
 
 if __name__=="__main__":
     main(sys.argv[1:])

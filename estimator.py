@@ -264,15 +264,14 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
     n_frames = jsondata['numberFrame']
     tstart = datetime.datetime.strptime(jsondata['startTime'], '%Y-%m-%d %H:%M:%S')
     # the grid
-    x0, x1 = jsondata['xBoundsUTM']
-    y0, y1 = jsondata['yBoundsUTM']
-    dx = jsondata['resolution']
-    x = x0 + dx*numpy.arange(jsondata['xDimPx'])
-    y = y0 + dx*numpy.arange(jsondata['yDimPx'])
-    xx, yy = numpy.meshgrid(x,y)
+    # Note: generate suing the function in config.py
+    # the dimensions should match 'width', 'height' attributes of jsondata.
+    dx = jsondata['gridResolution']
+    xx, yy = domain_grid(jsondata['gridOrigin'], jsondata['gridDimensions'],
+                         jsondata['gridRotation'], jsondata['gridResolution'])
     # the probe
     is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2
-     
+
     #-initialize export data structure
     ##################################
     result = {
@@ -324,10 +323,10 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
             ax0.set_xlim(x[0], x[-1])
             ax0.set_ylim(y[-1], y[0])
             ax1.set_xlim(x[0], x[-1])
-            ax1.set_ylim(y[-1], y[0])            
+            ax1.set_ylim(y[-1], y[0])
             pyplot.show()
-        
-        
+
+
         #-perform estimation
         ####################
         try:
