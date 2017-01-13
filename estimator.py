@@ -36,7 +36,7 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
 import scipy.io as io
-import skimage.io as skio
+import scipy.interpolate as interpolate
 ###
 from config import *
 
@@ -250,7 +250,7 @@ def get_fixed_length(message, fixedSize):
 ###### ESTIMATION FUNCTION #####
 ################################
 def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
-             save_probe=True, save_fields=False):
+             save_probe=True, save_fields=True, coarse_resolution=1.):
 
     #-load data
     ###########
@@ -263,11 +263,11 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
     datapath, _ = os.path.split(infofile)
     # some parameters
     width = jsondata['width']
-    height = jasondata['height']
+    height = jsondata['height']
     n_frames = jsondata['numberFrame']
     tstart = datetime.datetime.strptime(jsondata['startTime'], '%Y-%m-%d %H:%M:%S')
     # the grid
-    # Note: generate suing the function in config.py
+    # Note: generate using the function in config.py
     # the dimensions should match 'width', 'height' attributes of jsondata.
     dx = jsondata['gridResolution']
     xx, yy = domain_grid(jsondata['gridOrigin'], jsondata['gridDimensions'],
@@ -275,36 +275,55 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
     if xx.shape[0]!=height or xx.shape[1]!=width:
         print 'Generated grid does not match image size! Abort.'
         sys.exit(-1) 
-    # the probe
-    is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2
 
     #-initialize timeseries data structure
     ######################################
-    result_timeseries = {
-        'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
-        'author': 'Pierre DDERIAN',
-        'website': 'www.pierrederian.net',
-        'createdBy': __file__,
-        'description': 'Apparent displacements in [pixel] estimated by (cu)Typhoon between images pairs contained in "sourceData". The image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Displacements can be converted to (approximations of) instantaneous velocities by multiplying "ux" and "uy" by "dx"/"dt".',
-        'comment': comment,
-        'sourceData': os.path.basename(infofile),
-        'label': jsondata['label'],
-        'probe': AVG_PROBE,
-        'ux': [],
-        'uy': [],
-        't': [],
-        'dt': [],
-        'dx': jsondata['resolution'],
-        }
+    if save_probe:
+        if verbose:
+            print "Results will be save as timeseries in .json archive."
+        # the probe
+        is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2 
+        # the data structure
+        result_timeseries = {
+            'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
+            'author': 'Pierre DDERIAN',
+            'website': 'www.pierrederian.net',
+            'createdBy': __file__,
+            'description': 'Apparent displacements in [pixel] estimated by (cu)Typhoon between images pairs contained in "sourceData". The image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Displacements can be converted to (approximations of) instantaneous velocities by multiplying "ux" and "uy" by "dx"/"dt".',
+            'comment': comment,
+            'sourceData': os.path.basename(infofile),
+            'label': jsondata['label'],
+            'probe': AVG_PROBE,
+            'grid': {'origin': jsondata['gridOrigin'],
+                     'dimensions': jsondata['gridDimensions'],
+                     'rotation': jsondata['gridRotation'],
+                     'resolution': jsondata['gridResolution'],
+                     },
+            'ux': [],
+            'uy': [],
+            't': [],
+            'dt': [],
+            'dx': dx,
+            }
     
     #-initialize fields data structure
     ##################################
     if save_fields:
+        if verbose:
+            print "Results will be save as fields in .mat archive."
         # the coarse grid
-        dx_coarse = 1. # [TODO] as a parameter
+        dx_coarse = coarse_resolution
+        if dx_coarse<dx:
+            print "Decimated grid scale ({} m/px) should be greater than input image's ({} m/px). Abort.".format(dx_coarse, dx)
+            sys.exit(-1)
         xx_coarse, yy_coarse = domain_grid(jsondata['gridOrigin'], jsondata['gridDimensions'],
                                            jsondata['gridRotation'], dx_coarse)
         height_coarse, width_coarse = xx_coarse.shape
+        # the "regular grid" just for interpolators, in the image reference
+        x_fine = dx*numpy.arange(width)
+        y_fine = dx*numpy.arange(height)
+        x_coarse = dx_coarse*numpy.arange(width_coarse)
+        y_coarse = dx_coarse*numpy.arange(height_coarse)
         # the data structure
         result_fields = {
             'x': xx_coarse,
@@ -344,11 +363,11 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
         if verbose:
             print "+++ Preprocessing..."
         # load source im0, im1
-        im0_src = skio.imread(os.path.join(datapath, jsondata['sourceImages'][k]))
-        im1_src = skio.imread(os.path.join(datapath, jsondata['sourceImages'][k+1]))
+        im0_src = pyplot.imread(os.path.join(datapath, jsondata['sourceImages'][k]))
+        im1_src = pyplot.imread(os.path.join(datapath, jsondata['sourceImages'][k+1]))
         # load filtered im0, im1
-        im0_filt = skio.imread(os.path.join(datapath, jsondata['filteredImages'][k]))
-        im1_filt = skio.imread(os.path.join(datapath, jsondata['filteredImages'][k+1]))
+        im0_filt = pyplot.imread(os.path.join(datapath, jsondata['filteredImages'][k]))
+        im1_filt = pyplot.imread(os.path.join(datapath, jsondata['filteredImages'][k+1]))
         # get the difference
         im0_preproc = im0_src.astype(SEND_DTYPE) - im0_filt.astype(SEND_DTYPE)
         im1_preproc = im1_src.astype(SEND_DTYPE) - im1_filt.astype(SEND_DTYPE)
@@ -406,19 +425,25 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
             # the time of img0 and the time step
             t_img0 = tstart + datetime.timedelta(seconds=jsondata['frameTimestamps'][k])
             dt_img = jsondata['frameTimestamps'][k+1] - jsondata['frameTimestamps'][k]
-            # append estimate to result_timeseries
-            result_timeseries['ux'].append(numpy.mean(Ux[is_probed]))
-            result_timeseries['uy'].append(numpy.mean(Uy[is_probed]))
-            # and the corresponding time (of img0) and time step (between image pair)
-            result_timeseries['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
-            result_timeseries['dt'].append(dt_img)
+            if save_probe:
+                # append estimate to result_timeseries
+                result_timeseries['ux'].append(numpy.mean(Ux[is_probed]))
+                result_timeseries['uy'].append(numpy.mean(Uy[is_probed]))
+                # and the corresponding time (of img0) and time step (between image pair)
+                result_timeseries['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                result_timeseries['dt'].append(dt_img)
             # and to result fields
             if save_fields:
+                # interpolate motion to coarse grid and store in result
+                # Note: the coordinates order is the same as numpy's dimensions       
+                interpolator = interpolate.RectBivariateSpline(y_fine, x_fine, Ux)
+                result_fields['ux'][k] = interpolator(y_coarse, x_coarse, grid=True)
+                interpolator = interpolate.RectBivariateSpline(y_fine, x_fine, Uy)
+                result_fields['uy'][k] = interpolator(y_coarse, x_coarse, grid=True)
                 # and the corresponding time (of img0) and time step (between image pair)
                 result_fields['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
-                result_fields['dt'].append(dt_img)   
-                # [TODO] interpolate motion to coarse grid               
-                
+                result_fields['dt'].append(dt_img)
+            
             # [DEBUG] display
             if 0:
                 dimY, dimX = Ux.shape
@@ -451,12 +476,19 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
     ###############
     if outputdir is not None:
         basename, _ = os.path.splitext(os.path.basename(infofile))
-        outputfile = os.path.join(outputdir, '{}_{}probe.json'.format(
-            jsondata['label'], jsondata['prefix']))
-        with open(outputfile, 'w') as f:
-            json.dump(result_timeseries, f, indent=0)
-        if verbose:
-            print 'Saved motion timeseries archive {}'.format(outputfile)
+        if save_probe:
+            outputfile = os.path.join(outputdir, '{}_{}probe.json'.format(
+                jsondata['label'], jsondata['prefix']))
+            with open(outputfile, 'w') as f:
+                json.dump(result_timeseries, f, indent=0)
+            if verbose:
+                print 'Saved motion timeseries archive {}'.format(outputfile)
+        if save_fields:
+            outputfile = os.path.join(outputdir, '{}_{}fields.mat'.format(
+                jsondata['label'], jsondata['prefix']))
+            io.savemat(outputfile, result_fields)
+            if verbose:
+                print 'Saved motion fields archive {}'.format(outputfile)
 
 ##################################
 ###### POSTPROCESS FUNCTIONS #####
@@ -509,7 +541,18 @@ where
     parser.add_argument("-q", "--quiet", dest="verbose", help="enable quiet mode", action="store_false")
     parser.add_argument("-o", "--output", default=None, dest="outputDir", help=".mat output directory")
     parser.add_argument("-c", "--comment", default='', dest="comment", help="optional comment to be included to the archive")
-    parser.set_defaults(verbose=True, stopServer=False)
+    parser.add_argument("--probe", dest="save_probe", action="store_true",
+                        help="save probe timeseries (default)")
+    parser.add_argument("--no-probe", dest="save_probe", action="store_false",
+                        help="do NOT save probe timeseries")
+    parser.add_argument("--fields", dest="save_fields", action="store_true",
+                        help="save fields as .mat")
+    parser.add_argument("--no-fields", dest="save_fields", action="store_false",
+                        help="do NOT save fields as .mat (default)")
+    parser.add_argument("-r", "--resolution", default=0.5, type=float, dest="coarse_res",
+                        help="coarse resolution [m/px] of the output fields, with --fields.")
+                        
+    parser.set_defaults(verbose=True, stopServer=False, save_probe=True, save_fields=False)
     args = parser.parse_args(argv)
 
     #-welcome
@@ -527,7 +570,8 @@ where
         raise RuntimeError("no data files were provided!")
     for infofile in args.infofiles:
         estimate(infofile, args.serverPort, outputdir=args.outputDir,
-        comment=args.comment, verbose=args.verbose)
+        comment=args.comment, verbose=args.verbose, save_probe=args.save_probe,
+        save_fields=args.save_fields, coarse_resolution=args.coarse_res)
 
     #-stop server?
     ##############

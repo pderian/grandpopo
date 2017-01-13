@@ -475,8 +475,8 @@ if __name__=="__main__":
 
     preprocessor = DataPreprocessor(
         H=DEFAULT_H,
-        origin=(370235., 694040.),
-        dimensions=(130., 75.),
+        origin=(370220., 694040.),
+        dimensions=(150., 75.),
         rotation=0.,
         resolution=0.2,
         )
