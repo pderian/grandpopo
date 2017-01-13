@@ -249,7 +249,8 @@ def get_fixed_length(message, fixedSize):
 ################################
 ###### ESTIMATION FUNCTION #####
 ################################
-def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
+def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
+             save_probe=True, save_fields=False):
 
     #-load data
     ###########
@@ -261,6 +262,8 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
     # Note: this assumes images are in the same path as the infofile.
     datapath, _ = os.path.split(infofile)
     # some parameters
+    width = jsondata['width']
+    height = jasondata['height']
     n_frames = jsondata['numberFrame']
     tstart = datetime.datetime.strptime(jsondata['startTime'], '%Y-%m-%d %H:%M:%S')
     # the grid
@@ -269,12 +272,15 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
     dx = jsondata['gridResolution']
     xx, yy = domain_grid(jsondata['gridOrigin'], jsondata['gridDimensions'],
                          jsondata['gridRotation'], jsondata['gridResolution'])
+    if xx.shape[0]!=height or xx.shape[1]!=width:
+        print 'Generated grid does not match image size! Abort.'
+        sys.exit(-1) 
     # the probe
     is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2
 
-    #-initialize export data structure
-    ##################################
-    result = {
+    #-initialize timeseries data structure
+    ######################################
+    result_timeseries = {
         'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
         'author': 'Pierre DDERIAN',
         'website': 'www.pierrederian.net',
@@ -290,9 +296,44 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
         'dt': [],
         'dx': jsondata['resolution'],
         }
+    
+    #-initialize fields data structure
+    ##################################
+    if save_fields:
+        # the coarse grid
+        dx_coarse = 1. # [TODO] as a parameter
+        xx_coarse, yy_coarse = domain_grid(jsondata['gridOrigin'], jsondata['gridDimensions'],
+                                           jsondata['gridRotation'], dx_coarse)
+        height_coarse, width_coarse = xx_coarse.shape
+        # the data structure
+        result_fields = {
+            'x': xx_coarse,
+            'x_descr': 'UTM eastern (x) coordinates of grid points',
+            'y': yy_coarse,
+            'y_descr': 'UTM northern (y) coordinates of grid points',
+            'ux': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
+            'ux_descr': 'horizontal (x) displacement in [pixel], positive towards right (image reference)',
+            'uy': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
+            'uy_descr': 'vertical (y) displacement in [pixel], positive towards bottom (image reference)',
+            'dx': dx_coarse,
+            'dx_descr': 'spatial resolution in [meter/pixel]',
+            'dt': [],
+            'dt_descr': 'temporal resolution (time-step) in [s]',
+            't': [],
+            't_descr': 'datetime of each frame, format "%Y-%m-%d %H:%M:%S.%f". This is the time of the first frame of the pair used for each field estimation.',
+            'sourceData': os.path.basename(infofile),
+            'sourceData_descr': 'the json file containing the frames used for estimation',
+            'label': jsondata['label'],
+            'label_descr': 'a label for this experiment',
+            'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
+            'author': 'Pierre Derian - contact@pierrederian.net',
+            'createdBy': __file__,
+            'description': 'Apparent displacements in [pixel] estimated by (cu)Typhoon between images pairs listed in "SourceData". For the motions, the image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Displacements can be converted to (approximations of) instantaneous velocities by multiplying "ux" and "uy" by "dx"/"dt".',
+            'comment': comment,
+            }
 
-    #-for each file
-    ####################################
+    #-for each frame pair
+    #####################
     for k in xrange(n_frames-1):
         # print image pair
         if verbose:
@@ -325,7 +366,6 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
             ax1.set_xlim(x[0], x[-1])
             ax1.set_ylim(y[-1], y[0])
             pyplot.show()
-
 
         #-perform estimation
         ####################
@@ -363,15 +403,22 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
             # and/or filtering, visualization, export to whatever format...
             if verbose:
                 print "+++ Post processing..."
-            # append estimate to result
-            result['ux'].append(numpy.mean(Ux[is_probed]))
-            result['uy'].append(numpy.mean(Uy[is_probed]))
+            # the time of img0 and the time step
+            t_img0 = tstart + datetime.timedelta(seconds=jsondata['frameTimestamps'][k])
+            dt_img = jsondata['frameTimestamps'][k+1] - jsondata['frameTimestamps'][k]
+            # append estimate to result_timeseries
+            result_timeseries['ux'].append(numpy.mean(Ux[is_probed]))
+            result_timeseries['uy'].append(numpy.mean(Uy[is_probed]))
             # and the corresponding time (of img0) and time step (between image pair)
-            timg0 = tstart + datetime.timedelta(seconds=jsondata['frameTimestamps'][k])
-            result['t'].append(timg0.strftime('%Y-%m-%d %H:%M:%S.%f'))
-            result['dt'].append(
-                jsondata['frameTimestamps'][k+1]-jsondata['frameTimestamps'][k],
-                )
+            result_timeseries['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
+            result_timeseries['dt'].append(dt_img)
+            # and to result fields
+            if save_fields:
+                # and the corresponding time (of img0) and time step (between image pair)
+                result_fields['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
+                result_fields['dt'].append(dt_img)   
+                # [TODO] interpolate motion to coarse grid               
+                
             # [DEBUG] display
             if 0:
                 dimY, dimX = Ux.shape
@@ -407,9 +454,9 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True):
         outputfile = os.path.join(outputdir, '{}_{}probe.json'.format(
             jsondata['label'], jsondata['prefix']))
         with open(outputfile, 'w') as f:
-            json.dump(result, f, indent=0)
+            json.dump(result_timeseries, f, indent=0)
         if verbose:
-            print 'Saved motion archive {}'.format(outputfile)
+            print 'Saved motion timeseries archive {}'.format(outputfile)
 
 ##################################
 ###### POSTPROCESS FUNCTIONS #####

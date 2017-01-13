@@ -48,7 +48,7 @@ PARAMS_SWASH125 = {
     'label': 'swash_125m',
     'image_format': 'jpg', #format of output images
     'median_length': 5., #length of median filter in [m]
-    'resolution': 0.1, #[m/px]
+    'resolution': 0.2, #[m/px]
     'origin': (370240., 694050.), # origin (x,y) easting, northing of the domain in [m]
     'dimensions': (125., 45.), # domain size in [m]
     'rotation': -10., # domain rotation in [degree] around origin

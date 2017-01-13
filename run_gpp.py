@@ -112,16 +112,16 @@ if __name__=="__main__":
     action = 'decoder'
 
     if action=='decoder':
-        # the area centered over sensors (TGRS paper)
-        pattern = '20140313/06/30.mp4' #sensors
+        # the area centered over sensors
+        #pattern = '20140313/15/*.mp4' #sensors
         #process_group(pattern, params=PARAMS_COMP60)
-        process_group(pattern, params=PARAMS_COMP30)
+        #process_group(pattern, params=PARAMS_COMP30)
         # the wide field for flash rip monitoring (TGRS paper)
         #pattern = '20140312/12/*.mp4' #flash rip
         #process_group(pattern, params=PARAMS_RIP120)
         # the wide field for swash (COASTAL DYN paper)
-        #pattern = '20140313/06/30.mp4' # [TMP]
-        #process_group(pattern, params=PARAMS_SWASH125)
+        pattern = '20140313/15/*.mp4' # [TMP]
+        process_group(pattern, params=PARAMS_SWASH125)
 
     elif action=='estimator':
         pattern = '20140312/12/*.nc'

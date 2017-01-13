@@ -219,13 +219,17 @@ class DataPreprocessor:
         ax2.pcolormesh(self.X, self.Y, imgc, cmap='gray')
         # the areas
         ax2.add_artist(patches.Polygon(numpy.roll(yx60,1,axis=-1), fill=False, color=area60_color))
-        ax2.text(x60_label, y60_label, 'TGRS(1) 60x60 m', va='top', ha='center', color=area60_color)
+        ax2.text(x60_label, y60_label, 'TGRS(v1) {}x{} m'.format(*PARAMS_COMP60['dimensions']),
+                va='top', ha='center', color=area60_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx30,1,axis=-1), fill=False, color=area30_color))
-        ax2.text(x30_label, y30_label, 'TGRS(2) 30x30 m', va='top', ha='center', color=area30_color)
+        ax2.text(x30_label, y30_label, 'TGRS(v2?) {}x{} m'.format(*PARAMS_COMP30['dimensions']),
+                 va='top', ha='center', color=area30_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx120,1,axis=-1), fill=False, color=area120_color))
-        ax2.text(x120_label, y120_label, 'TGRS(1,2) 120x60 m', va='top', ha='center', color=area120_color)
+        ax2.text(x120_label, y120_label, 'TGRS(v1,v2) {}x{} m'.format(*PARAMS_RIP120['dimensions']),
+                 va='top', ha='center', color=area120_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx125,1,axis=-1), fill=False, color=area125_color))
-        ax2.text(x125_label, y125_label, 'COASTDYN 125x45 m', va='top', ha='center', color=area125_color)
+        ax2.text(x125_label, y125_label, 'COASTDYN {}x{} m'.format(*PARAMS_SWASH125['dimensions']),
+                 va='top', ha='center', color=area125_color)
         ax2.add_artist(
             patches.Circle((AVG_PROBE['x'], AVG_PROBE['y']), radius=AVG_PROBE['r'],
                            fill=True, color='teal', alpha=0.75),
@@ -236,7 +240,7 @@ class DataPreprocessor:
         ax2.plot(yxADV[0,1], yxADV[0,0], '*g')
         ax2.text(yxADV[0,1]-1, yxADV[0,0]-1, 'ADV', va='baseline', ha='right', color='g')
         ax2.plot(yxRelease[0,1], yxRelease[0,0], '*b')
-        ax2.text(yxRelease[0,1], yxRelease[0,0]-1.5, 'Release', va='baseline', ha='center', color='b')
+        ax2.text(yxRelease[0,1], yxRelease[0,0]-1.5, 'Dye release', va='baseline', ha='center', color='b')
         #
         ax2.set_xlim(yxBound[:,1].min(), yxBound[:,1].max())
         ax2.set_ylim(yxBound[:,0].min(), yxBound[:,0].max())
@@ -477,4 +481,4 @@ if __name__=="__main__":
         resolution=0.2,
         )
     preprocessor.demo("resources/sample_frame_release.jpg",
-                      "resources/grandpopo_config_rotation.jpg")
+                      "resources/grandpopo_config.jpg")
