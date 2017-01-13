@@ -14,7 +14,7 @@ This set of scripts handles the **processing of Grand Popo** shore-based video d
 
 ## Experiment configuration
 
-![Grand Popo experiment configuration][resources/grandpopo_config.jpg]
+![Grand Popo experiment configuration](resources/grandpopo_config.jpg)
 
 
 
