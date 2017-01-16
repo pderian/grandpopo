@@ -148,11 +148,30 @@ class DataPreprocessor:
         dpi = 90.
         fig, (ax1, ax2) = pyplot.subplots(2,1, figsize=(1000./dpi, 1000./dpi))
 
-        # interpolation boundaries
+        ### interpolation boundaries
         yxBound = get_yx_polygon(self.X, self.Y)
         iyxBound = self.projection.inverse(yxBound)
 
-        # aquapro & ADV sensors
+        ### compas
+        x0Compas = self.X[0,0] + 110. #[m]
+        y0Compas = self.Y[0,0] + 80. #[m]
+        lCompas = 10. #[m]
+        x1Compas = x0Compas
+        y1Compas = y0Compas + lCompas
+        x2Compas = x0Compas + lCompas
+        y2Compas = y0Compas
+        yxCompas = numpy.array([[y0Compas, x0Compas],
+                    [y1Compas, x1Compas],
+                    [y2Compas, x2Compas]])
+        iyxCompas = self.projection.inverse(yxCompas)
+        iyxCompas -= iyxCompas[0] - [[550, 1000]] #shift the arrows
+        yxCompas -= yxCompas[0] - [[self.Y[0,0]+5., self.X[0,0]+5]]
+        for i in [1,2]:
+            iyxCompas[i,:] -= iyxCompas[0,:]
+            iyxCompas[i,:] *= 30./numpy.sqrt(numpy.sum(iyxCompas[i,:]**2))
+        print iyxCompas
+
+        ### aquapro & ADV sensors
         iyxAquapro = numpy.array([[370, 600],]) #pixels
         yxAquapro = self.projection(iyxAquapro)
         iyxADV = numpy.array([[360, 660],]) #pixels
@@ -160,6 +179,7 @@ class DataPreprocessor:
         iyxRelease = numpy.array([[270, 1175],]) #pixels
         yxRelease = self.projection(iyxRelease)
 
+        ### subdomain
         # 60-m estimation area around sensors
         X60, Y60 = domain_grid(PARAMS_COMP60['origin'], PARAMS_COMP60['dimensions'],
                                PARAMS_COMP60['rotation'], PARAMS_COMP60['resolution'])
@@ -184,7 +204,7 @@ class DataPreprocessor:
         y120_label = yx120[:,0].min() # world coord for the text label
         x120_label = yx120[:,1].mean()
         area120_color = 'c'
-        #
+        # 125x45 m for COASTDYN
         X125, Y125 = domain_grid(PARAMS_SWASH125['origin'], PARAMS_SWASH125['dimensions'],
                                  PARAMS_SWASH125['rotation'], PARAMS_SWASH125['resolution'])
         yx125 = get_yx_polygon(X125, Y125)
@@ -192,10 +212,10 @@ class DataPreprocessor:
         y125_label = Y125[0,:].mean() # world coord for the text label
         x125_label = yx125[:,1].mean()
         area125_color = 'pink'
-        print yx125
-        print yx120
 
-        # display
+
+
+        #### original data
         ax1.set_title('Original')
         ax1.set_xlabel('i [px]')
         ax1.set_ylabel('j [px]')
@@ -211,16 +231,29 @@ class DataPreprocessor:
         ax1.plot(iyx120[0,1], iyx120[0,0], 'o', color=area120_color)
         ax1.add_artist(patches.Polygon(numpy.roll(iyx125,1,axis=-1), fill=False, color=area125_color))
         ax1.plot(iyx125[0,1], iyx125[0,0], 'o', color=area125_color)
+        # the sensors
         ax1.plot(iyxAquapro[0,1], iyxAquapro[0,0], '*r')
         ax1.plot(iyxADV[0,1], iyxADV[0,0], '*g')
         ax1.plot(iyxRelease[0,1], iyxRelease[0,0], '*b')
+        # the compas
+        ax1.quiver([iyxCompas[0,1],],
+                   [iyxCompas[0,0],],
+                   [iyxCompas[1,1],],
+                   [iyxCompas[1,0],],
+                   color=['w', 'k'],
+                   units='xy', angles='xy',
+                   scale_units='xy',
+                   )
+        ax1.text(iyxCompas[0,1]-5, iyxCompas[0,0]-5, 'N', color='w', weight='bold',
+                 va='bottom', ha='right')
+        #
         ax1.set_xlim(0, img.shape[1])
         ax1.set_ylim(img.shape[0], 0)
-        #
+        ### rectified data
         ax2.set_aspect('equal')
         ax2.set_title('Rectified, {} m/px'.format(self.param['resolution']))
-        ax2.set_xlabel('Easting x [m]')
-        ax2.set_ylabel('Northing y [m]')
+        ax2.set_xlabel('easting x [m]')
+        ax2.set_ylabel('northing y [m]')
         ax2.pcolormesh(self.X, self.Y, imgc, cmap='gray')
         # the areas
         ax2.add_artist(patches.Polygon(numpy.roll(yx60,1,axis=-1), fill=False, color=area60_color))
@@ -250,6 +283,15 @@ class DataPreprocessor:
         ax2.text(yxADV[0,1]-1, yxADV[0,0]-1, 'ADV', va='baseline', ha='right', color='g')
         ax2.plot(yxRelease[0,1], yxRelease[0,0], '*b')
         ax2.text(yxRelease[0,1], yxRelease[0,0]-1.5, 'Dye release', va='baseline', ha='center', color='b')
+        # the compas
+        ax2.quiver([yxCompas[0,1],],
+                   [yxCompas[0,0],],
+                   [yxCompas[1,1]-yxCompas[0,1],],
+                   [yxCompas[1,0]-yxCompas[0,0],],
+                   color=['w', 'k'],
+                   units='xy', angles='xy', scale_units='xy')
+        ax2.text(yxCompas[0,1], yxCompas[0,0]-1., 'N', color='w', weight='bold',
+                 va='top', ha='center')
         #
         ax2.set_xlim(yxBound[:,1].min(), yxBound[:,1].max())
         ax2.set_ylim(yxBound[:,0].min(), yxBound[:,0].max())
