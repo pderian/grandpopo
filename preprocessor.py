@@ -200,12 +200,17 @@ class DataPreprocessor:
         ax1.set_xlabel('i [px]')
         ax1.set_ylabel('j [px]')
         ax1.imshow(img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-        # roll to get x,y instead of y, x
+        # plot the various areas and add a marker at the origin
+        # Note: roll to get x,y instead of y, x
         ax1.add_artist(patches.Polygon(numpy.roll(iyxBound,1,axis=-1), fill=False, ls='--'))
         ax1.add_artist(patches.Polygon(numpy.roll(iyx60,1,axis=-1), fill=False, color=area60_color))
+        ax1.plot(iyx60[0,1], iyx60[0,0], 'o', color=area60_color)
         ax1.add_artist(patches.Polygon(numpy.roll(iyx30,1,axis=-1), fill=False, color=area30_color))
+        ax1.plot(iyx30[0,1], iyx30[0,0], 'o', color=area30_color)
         ax1.add_artist(patches.Polygon(numpy.roll(iyx120,1,axis=-1), fill=False, color=area120_color))
+        ax1.plot(iyx120[0,1], iyx120[0,0], 'o', color=area120_color)
         ax1.add_artist(patches.Polygon(numpy.roll(iyx125,1,axis=-1), fill=False, color=area125_color))
+        ax1.plot(iyx125[0,1], iyx125[0,0], 'o', color=area125_color)
         ax1.plot(iyxAquapro[0,1], iyxAquapro[0,0], '*r')
         ax1.plot(iyxADV[0,1], iyxADV[0,0], '*g')
         ax1.plot(iyxRelease[0,1], iyxRelease[0,0], '*b')
@@ -219,15 +224,19 @@ class DataPreprocessor:
         ax2.pcolormesh(self.X, self.Y, imgc, cmap='gray')
         # the areas
         ax2.add_artist(patches.Polygon(numpy.roll(yx60,1,axis=-1), fill=False, color=area60_color))
+        ax2.plot(yx60[0,1], yx60[0,0], 'o', color=area60_color)
         ax2.text(x60_label, y60_label, 'TGRS(v1) {}x{} m'.format(*PARAMS_COMP60['dimensions']),
                 va='top', ha='center', color=area60_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx30,1,axis=-1), fill=False, color=area30_color))
+        ax2.plot(yx30[0,1], yx30[0,0], 'o', color=area30_color)
         ax2.text(x30_label, y30_label, 'TGRS(v2?) {}x{} m'.format(*PARAMS_COMP30['dimensions']),
                  va='top', ha='center', color=area30_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx120,1,axis=-1), fill=False, color=area120_color))
+        ax2.plot(yx120[0,1], yx120[0,0], 'o', color=area120_color)
         ax2.text(x120_label, y120_label, 'TGRS(v1,v2) {}x{} m'.format(*PARAMS_RIP120['dimensions']),
                  va='top', ha='center', color=area120_color)
         ax2.add_artist(patches.Polygon(numpy.roll(yx125,1,axis=-1), fill=False, color=area125_color))
+        ax2.plot(yx125[0,1], yx125[0,0], 'o', color=area125_color)
         ax2.text(x125_label, y125_label, 'COASTDYN {}x{} m'.format(*PARAMS_SWASH125['dimensions']),
                  va='top', ha='center', color=area125_color)
         ax2.add_artist(

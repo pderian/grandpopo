@@ -12,6 +12,9 @@ ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
 # this is the directory where ffmpeg & co are installed, since libav sucks ass.
 FFMPEG_DIR = '/opt/local/bin' #'ffmpeg/ffmpeg-git-20160511-64bit-static'
 
+### The orientation of the beach reference w.r.t. Easting, Northing reference.
+BEACH_ORIENTATION = 10. # in [degree]
+
 ### Case parameters
 PARAMS_COMP60 = {
     # Parameters for the 60x60 m area covering the ADV/Aquapro sensors (TGRS paper)
@@ -51,10 +54,11 @@ PARAMS_SWASH125 = {
     'resolution': 0.2, #[m/px]
     'origin': (370240., 694050.), # origin (x,y) easting, northing of the domain in [m]
     'dimensions': (125., 45.), # domain size in [m]
-    'rotation': -10., # domain rotation in [degree] around origin
+    'rotation': BEACH_ORIENTATION, # domain rotation in [degree] around origin, see BEACH_ORIENTATION
     }
 
 ### Averaging probe for time-series
+# located near the instruments
 AVG_PROBE = {
     'x': 370325.0, # x (easting) coordinate in [m]
     'y': 694098.0, # y (northing) coordinate in [m]
@@ -85,6 +89,6 @@ def domain_grid(origin, dimensions, rotation, resolution):
     X, Y = numpy.meshgrid(x, y) # 2d
     cos_theta = numpy.cos(numpy.deg2rad(rotation))
     sin_theta = numpy.sin(numpy.deg2rad(rotation))
-    Xr = cos_theta*X + sin_theta*Y + origin[0] #apply rotation
-    Yr = -sin_theta*X + cos_theta*Y + origin[1]
+    Xr = cos_theta*X - sin_theta*Y + origin[0] #apply rotation
+    Yr = sin_theta*X + cos_theta*Y + origin[1]
     return Xr, Yr
