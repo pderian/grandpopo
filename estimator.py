@@ -286,7 +286,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
         # the data structure
         result_timeseries = {
             'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
-            'author': 'Pierre DDERIAN',
+            'author': 'Pierre DERIAN',
             'website': 'www.pierrederian.net',
             'createdBy': __file__,
             'description': 'Apparent displacements in [pixel] estimated by (cu)Typhoon between images pairs contained in "sourceData". The image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Displacements can be converted to (approximations of) instantaneous velocities by multiplying "ux" and "uy" by "dx"/"dt".',
