@@ -9,8 +9,10 @@ import numpy
 ### Path
 ROOT_RAWDATA_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Videos'
 ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
+# ROOT_ESTIM_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Estim/'
+ROOT_ESTIM_DIR = '/Users/pderian/Documents/Data/GrandPopo/data/plage/estim'
 # this is the directory where ffmpeg & co are installed, since libav sucks ass.
-FFMPEG_DIR = '/opt/local/bin' #'ffmpeg/ffmpeg-git-20160511-64bit-static'
+FFMPEG_DIR = '/opt/local/bin'
 
 ### The orientation of the beach reference w.r.t. Easting, Northing reference.
 BEACH_ORIENTATION = 10. # in [degree]
@@ -59,11 +61,14 @@ PARAMS_SWASH125 = {
 
 ### Averaging probe for time-series
 # located near the instruments
-AVG_PROBE = {
+# this probe was used in v1 and early tests of v2.
+AVG_PROBE_LEGACY = {
     'x': 370325.0, # x (easting) coordinate in [m]
     'y': 694098.0, # y (northing) coordinate in [m]
     'r': 1.0 # probe radius in [m]
 }
+# this is the default probe
+AVG_PROBE = AVG_PROBE_LEGACY
 
 ### Projection
 # this H was estimated from the mapping in the mat file.
