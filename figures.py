@@ -136,7 +136,7 @@ def rolling_median_test2(data, win='1T', tau=10):
 
 ### MAIN PLOTTING FUNCTIONS ###
 ###############################
-def figmap(as_grey=False):
+def figmap(as_grey=False, with_panels=False):
 
     def get_yx_polygon(X, Y):
         return numpy.array([[Y[iy, ix], X[iy, ix]]
@@ -206,29 +206,14 @@ def figmap(as_grey=False):
 
     #### load images
     framefile = 'resources/sample_frame_release.jpg'
-    ADVfile = 'resources/grandpopo_ADV.jpg'
-    dyefile = 'resources/grandpopo_dyerelease.jpg'
-    copterfile = 'resources/grandpopo_hexacopter.jpg'
-    mapfile = 'resources/grandpopo_map.jpg'
-    camerafile = 'resources/grandpopo_camera2.jpg'
     frame_img = skio.imread(framefile, as_grey=as_grey)
-    ADV_img = skio.imread(ADVfile, as_grey=as_grey)
-    dye_img = skio.imread(dyefile, as_grey=as_grey)
-    copter_img = skio.imread(copterfile, as_grey=as_grey)
-    map_img = skio.imread(mapfile, as_grey=as_grey)
-    camera_img = skio.imread(camerafile, as_grey=as_grey)
 
     ### figure
     fig = pyplot.figure(figsize=(w, h))
     # axes
-    axfr = fig.add_axes([.07, .46, .67, .53], xlabel='$m$ (px)', ylabel='$n$ (px)')
-    axADV = fig.add_axes([.02, .02, .2, .35], xlabel='', ylabel='')
-    axdye = fig.add_axes([.27, .02, .33, .35], xlabel='', ylabel='')
-    axcopter = fig.add_axes([.65, .02, .33, .35], xlabel='', ylabel='')
-    axmap = fig.add_axes([.77, .675, .22, .3], xlabel='', ylabel='')
-    axcamera = fig.add_axes([.77, .40, .22, .3], xlabel='', ylabel='')
+    axfr = fig.add_axes([.08, .48, .66, .49], xlabel='$m$ (px)', ylabel='$n$ (px)')
     # style axes
-    for ax in [axfr, axADV, axdye, axcopter, axmap, axcamera]:
+    for ax in [axfr,]:
         set_axes_color(ax, axcolor)
 
     ### main frame
@@ -236,14 +221,12 @@ def figmap(as_grey=False):
     axfr.imshow(frame_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
     # plot domains
     axfr.add_artist(patches.Polygon(numpy.roll(iyx60,1,axis=-1), fill=False,
-        color=area60_color, ls='-', lw=1.5))
-    #axfr.plot(iyx60[0,1], iyx60[0,0], 'o', color=area60_color)
+        color=area60_color, ls='-', lw=1.))
     axfr.add_artist(patches.Polygon(numpy.roll(iyx120,1,axis=-1), fill=False,
-        color=area120_color, ls='--', lw=1.5))
-    #axfr.plot(iyx120[0,1], iyx120[0,0], 'o', color=area120_color)
+        color=area120_color, ls='--', lw=1.))
     # plot sensors
-    axfr.plot(iyxADV[0,1], iyxADV[0,0], 'ow', markeredgewidth=.75)
-    axfr.plot(iyxRelease[0,1], iyxRelease[0,0], 'dw', markeredgewidth=.75)
+    axfr.plot(iyxADV[0,1], iyxADV[0,0], 'ow', markeredgewidth=.5)
+    axfr.plot(iyxRelease[0,1], iyxRelease[0,0], 'dw', markeredgewidth=.5)
     # plot compas
     axfr.quiver([iyxCompas[0,1],],
                [iyxCompas[0,0],],
@@ -258,41 +241,69 @@ def figmap(as_grey=False):
     # misc
     axfr.set_xlim(0, frame_img.shape[1])
     axfr.set_ylim(frame_img.shape[0], 0)
-    axfr.text(0.085, 0.95, "a)", color='w', ha='left', va='top',
-              transform=fig.transFigure, fontsize='large')
+    # reset formatter for ticks
+    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
 
-    ### ADV
-    axADV.imshow(ADV_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-    axADV.set_xticks([])
-    axADV.set_yticks([])
+    if with_panels:
+        ### read images
+        ADVfile = 'resources/grandpopo_ADV.jpg'
+        dyefile = 'resources/grandpopo_dyerelease.jpg'
+        copterfile = 'resources/grandpopo_hexacopter.jpg'
+        mapfile = 'resources/grandpopo_map.jpg'
+        camerafile = 'resources/grandpopo_camera2.jpg'
+        ADV_img = skio.imread(ADVfile, as_grey=as_grey)
+        dye_img = skio.imread(dyefile, as_grey=as_grey)
+        copter_img = skio.imread(copterfile, as_grey=as_grey)
+        map_img = skio.imread(mapfile, as_grey=as_grey)
+        camera_img = skio.imread(camerafile, as_grey=as_grey)
 
-    ### Dye
-    axdye.imshow(dye_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-    axdye.set_xticks([])
-    axdye.set_yticks([])
+        ### axes
+        axADV = fig.add_axes([.02, .02, .2, .35], xlabel='', ylabel='')
+        axdye = fig.add_axes([.27, .02, .33, .35], xlabel='', ylabel='')
+        axcopter = fig.add_axes([.65, .02, .33, .35], xlabel='', ylabel='')
+        axmap = fig.add_axes([.77, .675, .22, .3], xlabel='', ylabel='')
+        axcamera = fig.add_axes([.77, .40, .22, .3], xlabel='', ylabel='')
+        # style axes
+        for ax in [axADV, axdye, axcopter, axmap, axcamera]:
+            set_axes_color(ax, axcolor)
 
-    ### Hexacopter
-    axcopter.imshow(copter_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-    axcopter.set_xticks([])
-    axcopter.set_yticks([])
-
-    ### Map
-    axmap.imshow(map_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-    axmap.set_xticks([])
-    axmap.set_yticks([])
-    axmap.text(0.785, 0.95, "b)", color='w', ha='left', va='top',
-              transform=fig.transFigure, fontsize='large')
-
-    ### camera
-    axcamera.imshow(camera_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
-    axcamera.set_xticks([])
-    axcamera.set_yticks([])
-    axcamera.text(0.785, 0.62, "c)", color='k', ha='left', va='top',
+        ### main frame
+        axfr.text(0.085, 0.95, "a)", color='w', ha='left', va='top',
                   transform=fig.transFigure, fontsize='large')
+
+        ## ADV
+        axADV.imshow(ADV_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
+        axADV.set_xticks([])
+        axADV.set_yticks([])
+
+        ## Dye
+        axdye.imshow(dye_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
+        axdye.set_xticks([])
+        axdye.set_yticks([])
+
+        ## Hexacopter
+        axcopter.imshow(copter_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
+        axcopter.set_xticks([])
+        axcopter.set_yticks([])
+
+        ## Map
+        axmap.imshow(map_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
+        axmap.set_xticks([])
+        axmap.set_yticks([])
+        axmap.text(0.785, 0.95, "b)", color='w', ha='left', va='top',
+                  transform=fig.transFigure, fontsize='large')
+
+        ## camera
+        axcamera.imshow(camera_img, cmap='gray', interpolation='nearest', vmin=0.1, vmax=0.9)
+        axcamera.set_xticks([])
+        axcamera.set_yticks([])
+        axcamera.text(0.785, 0.62, "c)", color='k', ha='left', va='top',
+                      transform=fig.transFigure, fontsize='large')
 
     fig.savefig('../figures/configuration_{:.0f}dpi.png'.format(dpi), dpi=dpi)
     fig.savefig('../figures/configuration_90dpi.png', dpi=90)
-    pyplot.show()
+#     pyplot.show()
 
 def figtracer(tracerfile, force_imgdir=None):
     """
