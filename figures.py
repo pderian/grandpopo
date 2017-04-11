@@ -301,9 +301,8 @@ def figmap(as_grey=False, with_panels=False):
         axcamera.text(0.785, 0.62, "c)", color='k', ha='left', va='top',
                       transform=fig.transFigure, fontsize='large')
 
-    fig.savefig('../figures/configuration_{:.0f}dpi.png'.format(dpi), dpi=dpi)
-    fig.savefig('../figures/configuration_90dpi.png', dpi=90)
-#     pyplot.show()
+    fig.savefig('../figures/configuration_{:.0f}dpi.pdf'.format(dpi), dpi=dpi)
+    fig.savefig('../figures/configuration_150dpi.png', dpi=150)
 
 def figtracer(tracerfile, force_imgdir=None):
     """
@@ -377,10 +376,13 @@ def figtracer(tracerfile, force_imgdir=None):
     ax = axes[3] #bottom right
     ax.set_xlabel(r'$x$ (px)')
     ax.yaxis.set_ticklabels([])
-    pyplot.subplots_adjust(left=0.07, bottom=0.09, right=0.95, top=0.94, wspace=0., hspace=0.19)
+    ### reset formatters
+    for ax in axes:
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+    pyplot.subplots_adjust(left=0.07, bottom=0.09, right=0.95, top=0.94, wspace=0., hspace=0.25)
     fig.savefig('../figures/tracers_drone_avg_{:.0f}dpi.png'.format(dpi), dpi=dpi)
-    fig.savefig('../figures/tracers_drone_avg_90dpi.png', dpi=90)
-    #pyplot.show()
+    fig.savefig('../figures/tracers_drone_avg_150dpi.png', dpi=150)
 
 def tracerlifetime(tracerfile):
     """
@@ -397,6 +399,47 @@ def tracerlifetime(tracerfile):
         reset.append(len(particle['color']))
         lifetimes += numpy.diff(reset).tolist()
     print numpy.mean(lifetimes), numpy.std(lifetimes)
+
+def tracerpath(tracerfile, force_imgdir=None):
+
+    ### load data
+    with open(tracerfile) as f:
+        data = cPickle.load(f)
+
+    ### split the different paths
+    paths = []
+    # for each drifter
+    for k in data['tracer_keys']:
+        particle = data[k]
+        # find when the particle was reset
+        reset = [0,] + [i for i,c in enumerate(particle['color']) if c is None]
+        reset.append(len(particle['color'])) # add the last time
+        # and append the corresponding path to the list
+        for k in xrange(len(reset)-1):
+            tmp = numpy.array(particle['pos'][reset[k]:reset[k+1]])
+            # only if it has at least 2 points
+            if tmp.shape[0]>1:
+                paths.append(tmp)
+
+    ### plot
+    # create axes
+    ax = pyplot.gca()
+    #set_axes_color(ax, axcolor) #change the elements color
+    # get the files, load image
+    _, ifile, _ = data['files'][119]
+    if force_imgdir:
+        ifile = os.path.join(force_imgdir, os.path.basename(ifile))
+    im = pyplot.imread(ifile)
+    # display image
+    ax.imshow(im)
+    # plot paths
+    for p in paths:
+        c = 'r' if p[-1,1]<p[0,1] else '.2'
+        ax.plot(p[:,0], p[:,1], color=c)
+    # style axes
+    ax.set_xlim(580., 1020.) #pixels
+    ax.set_ylim(380., 120.)
+    pyplot.show()
 
 def figpreproc(beachraw_file, beachpreproc_file, droneraw_file, droneB_file, droneBmed_file,
                beachtitle='', dronetitle=''):
@@ -480,12 +523,16 @@ def figpreproc(beachraw_file, beachpreproc_file, droneraw_file, droneB_file, dro
         ax.yaxis.set_minor_locator(ticker.MultipleLocator(100))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(200))
 
+    ### reset formatters
+    for ax in [ax1, ax2, ax3, ax4]:
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+
     #### finish
 #     pyplot.subplots_adjust(left=.05, bottom=.08, right=.99, top=.95, hspace=.3, wspace=.24) #double column
     pyplot.subplots_adjust(left=.14, bottom=.08, right=.95, top=.96, hspace=.35, wspace=.5) #single column
     fig.savefig('../figures/processing_{:.0f}dpi.png'.format(dpi), dpi=dpi)
-    fig.savefig('../figures/processing_90dpi.png', dpi=90)
-#     pyplot.show()
+    fig.savefig('../figures/processing_150dpi.png', dpi=150)
 
 def figvectors():
     """
@@ -604,10 +651,14 @@ def figvectors():
     ax.set_ylabel(r'$y$ (m)')
     ax = axes[3] # bottom right
     ax.set_xlabel(r'$x$ (m)')
+    # reset formatters
+    for ax in axes:
+        ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
+        ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
     # adjust layout
     pyplot.subplots_adjust(left=0.07, bottom=.08, right=0.98, top=0.94, hspace=0.25)
     fig.savefig('../figures/dyevectors_{:.0f}dpi.png'.format(dpi), dpi=dpi)
-    fig.savefig('../figures/dyevectors_90dpi.png', dpi=90)
+    fig.savefig('../figures/dyevectors_150dpi.png', dpi=150)
     pyplot.show()
 
 def shorecamTimestep():
@@ -636,50 +687,6 @@ def shorecamTimestep():
     print 'dt: mean={:.2f} s, std={:.2f} s - min={:.2f} s, max={:.2f} s'.format(
         mean_dt, std_dt, numpy.min(dt), numpy.max(dt))
     pyplot.hist(dt, bins=20, range=(0.25, 1.25), cumulative=True)
-    pyplot.show()
-
-def figscatter(datafile):
-
-    data = scio.loadmat(datafile)
-    u_ADV = data['U_ADV'].squeeze()
-    v_ADV = data['V_ADV'].squeeze()
-    u_OF = data['U_OF'].squeeze()
-    v_OF = data['V_OF'].squeeze()
-
-    # filter out?
-    tau = None
-    if tau:
-        good = (numpy.abs(u_OF)<tau) & (numpy.abs(v_OF)<tau) & (numpy.abs(u_ADV)<tau) & (numpy.abs(v_ADV)<tau)
-        u_ADV = u_ADV[good]
-        v_ADV = v_ADV[good]
-        u_OF = u_OF[good]
-        v_OF = v_OF[good]
-
-    # RMS error
-    u_rms = numpy.sqrt(numpy.mean((u_ADV-u_OF)**2))
-    v_rms = numpy.sqrt(numpy.mean((v_ADV-v_OF)**2))
-    # linear regression
-    u_slope, u_offset, u_r, u_p, u_stderr = stats.linregress(u_ADV, u_OF)
-    v_slope, v_offset, v_r, v_p, v_stderr = stats.linregress(v_ADV, v_OF)
-
-    print 'RMS: {:.2f}, {:.2f}'.format(u_rms, v_rms)
-    print 'slopes: {:.2f}, {:.2f}'.format(u_slope, v_slope)
-    print 'offsets: {:.2f}, {:.2f}'.format(u_offset, v_offset)
-    print 'r^2: {:.2f}, {:.2f}'.format(u_r**2, v_r**2)
-    print 'p: {:.2f}, {:.2f}'.format(u_p, v_p)
-   #print 'stderr: {:.2f}, {:.2f}'.format(u_stderr, v_stderr)
-
-    fig = pyplot.figure()
-    ax1 = fig.add_subplot(121, aspect='equal', xlabel='u ADV (m/s)', ylabel='u OF (m/s)')
-    ax2 = fig.add_subplot(122, aspect='equal', xlabel='v ADV (m/s)', ylabel='v OF (m/s)')
-    ax1.plot(u_ADV, u_OF, 'ob', markeredgecolor='none', alpha=0.05)
-    ax2.plot(v_ADV, v_OF, 'or', markeredgecolor='none', alpha=0.05)
-    for ax, sl, off, co in zip([ax1, ax2], [u_slope, v_slope], [u_offset, v_offset], ['b', 'r']):
-        xlim = ax1.get_xlim()
-        ylim = ax1.get_ylim()
-        y = [sl*x + off for x in xlim]
-        ax.plot(xlim, ylim, '--k')
-        ax.plot(xlim, y, '--'+co)
     pyplot.show()
 
 def figseries(rotate=-10.):
@@ -822,16 +829,20 @@ def figseries(rotate=-10.):
     # tune
     ax0.set_xlim(1./900, 0.3)
     ax0.set_ylim(1e-1, 1.5e2)
-    pyplot.subplots_adjust(left=.15, bottom=.22, right=.99, top=.93)
+    ### reset formatters
+    ax0.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
+    ax0.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
+    # save
+    pyplot.subplots_adjust(left=.17, bottom=.22, right=.99, top=.93)
     outfile = '../figures/spectrum_rot{}{}_{:.0f}dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
     fig0.savefig(outfile,
                  dpi=dpi)
     print 'saved', outfile
-    outfile = '../figures/spectrum_rot{}{}_90dpi.png'.format(
+    outfile = '../figures/spectrum_rot{}{}_150dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)))
     fig0.savefig(outfile,
-                 dpi=90)
+                 dpi=150)
 
     ### plot time-series
     for var, labeltop, labelbottom, ylim in zip(['vl', 'vc'],
@@ -884,8 +895,9 @@ def figseries(rotate=-10.):
         ax1.yaxis.set_ticks([-0.5, 0., 0.5])
         ax2.yaxis.set_minor_locator(ticker.MultipleLocator(0.25))
         ax2.yaxis.set_ticks([-1., 0., 1.])
-        #for ax in [ax1, ax2]:
-        #    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%4.1f'))
+        ### reset formatters
+        for ax in [ax1, ax2]:
+            ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
         # limits
         ax1.set_ylim(ylim)
         ax1.axvspan(data_estim.index[zmin], data_estim.index[zmax], zorder=0,
@@ -899,18 +911,15 @@ def figseries(rotate=-10.):
         fig1.savefig(outfile,
                      dpi=dpi)
         print 'saved', outfile
-        outfile = '../figures/timeseries_{}_rot{}{}_90dpi.png'.format(
+        outfile = '../figures/timeseries_{}_rot{}{}_150dpi.png'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)))
         fig1.savefig(outfile,
-                     dpi=90)
-
-#     pyplot.show()
-
+                     dpi=150)
 
 if __name__=="__main__":
 
     # domain / configuration
-    if 1:
+    if 0:
         figmap()
 
     # raw / filtered preprocess figure
@@ -938,7 +947,10 @@ if __name__=="__main__":
 
     # drone estimations - tracer figure
     tracerfile = '/Users/pderian/Documents/Data/GrandPopo/data/drone/halfres/estim_median/advect_avg_movie/tracerpath'
+    droneimg_dir = '/Users/pderian/Documents/Data/GrandPopo/data/drone/halfres/rectif_jpg'
     if 0:
-        figtracer(tracerfile, force_imgdir='/Users/pderian/Documents/Data/GrandPopo/data/drone/halfres/rectif_jpg')
+        figtracer(tracerfile, force_imgdir=droneimg_dir)
     if 0:
         tracerlifetime(tracerfile)
+    if 0:
+        tracerpath(tracerfile, force_imgdir=droneimg_dir)
