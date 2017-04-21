@@ -1,3 +1,8 @@
+"""Render figures for the TGRS paper.
+
+Written by P. DERIAN 2017
+www.pierrederian.net
+"""
 ###
 import datetime
 import glob
@@ -9,8 +14,6 @@ import sys
 ###
 import matplotlib
 matplotlib.rcParams['text.usetex'] = True
-#matplotlib.rcParams['text.latex.unicode'] = True
-# import matplotlib
 import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.dates as dates
@@ -366,15 +369,15 @@ def figtracer(tracerfile, force_imgdir=None):
     # specific styling
     ax = axes[0] #top left
     ax.xaxis.set_ticklabels([])
-    ax.set_ylabel(r'$y$ (px)')
+    ax.set_ylabel(r'$n$ (px)')
     ax = axes[1] #top right
     ax.xaxis.set_ticklabels([])
     ax.yaxis.set_ticklabels([])
     ax = axes[2] #bottom left
-    ax.set_xlabel(r'$x$ (px)')
-    ax.set_ylabel(r'$y$ (px)')
+    ax.set_xlabel(r'$m$ (px)')
+    ax.set_ylabel(r'$n$ (px)')
     ax = axes[3] #bottom right
-    ax.set_xlabel(r'$x$ (px)')
+    ax.set_xlabel(r'$m$ (px)')
     ax.yaxis.set_ticklabels([])
     ### reset formatters
     for ax in axes:
@@ -506,6 +509,7 @@ def figpreproc(beachraw_file, beachpreproc_file, droneraw_file, droneB_file, dro
         ax.xaxis.set_major_locator(ticker.MultipleLocator(20))
         ax.yaxis.set_minor_locator(ticker.MultipleLocator(10))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(20))
+        ax.invert_xaxis() # to match with UTM orientation
 
     ### drone
     drone_xlim = (700., 1000.)
@@ -626,8 +630,9 @@ def figvectors():
         # average fields over 10 s (~20 frames)
         #tmp_ux = ux[n,:,:] # these are the instantaneous fields
         #tmp_uy = uy[n,:,:]
-        ux_mean = numpy.mean(ux[n-10:n+10,:,:], axis=0)
-        uy_mean = numpy.mean(uy[n-10:n+10,:,:], axis=0)
+        di = 10
+        ux_mean = numpy.mean(ux[n-di:n+di,:,:], axis=0)
+        uy_mean = numpy.mean(uy[n-di:n+di,:,:], axis=0)
         tmp_ux = numpy.ma.array(ux_mean, mask=not_mask)
         tmp_uy = numpy.ma.array(uy_mean, mask=not_mask)
         # colors of the vectors
@@ -689,7 +694,7 @@ def shorecamTimestep():
     pyplot.hist(dt, bins=20, range=(0.25, 1.25), cumulative=True)
     pyplot.show()
 
-def figseries(rotate=-10.):
+def figseries(rotate=(-10.)):
 
     #### plot parameters
     w1 = 3.5 #inches (43 picas) IEEE single colum
@@ -722,11 +727,9 @@ def figseries(rotate=-10.):
     # make pandas objects
     data_ADV = pandas.DataFrame({'vl':vl_ADV, 'vc':vc_ADV}, index=t_ADV)
     data_estim = pandas.DataFrame({'vl':vl_estim, 'vc':vc_estim}, index=t_estim)
-    # remove outliers?
-#     data_ADV =  rolling_median_test(data_ADV, tau=2.)
-#     data_estim = rolling_median_test(data_estim, tau=2.)
-#     data_ADV =  rolling_median_test2(data_ADV)
-#     data_estim = rolling_median_test2(data_estim)
+    # remove outliers
+    #data_ADV = rolling_median_test(data_ADV, win='20S', tau=3.)
+    #data_estim = rolling_median_test(data_estim, win='20S', tau=3.)
 
     # resample (and average), drop missing data
     resample_short = '2S' #2 s
@@ -746,8 +749,11 @@ def figseries(rotate=-10.):
     zmin = 1530 # this is for the zoom
     zmax = zmin + 300
 
+    print data_estim['vc'][:10]
+    return
+
     ### statistics
-    tau = 0.1
+    tau = 0. #to filter out low velocities (0 =  no filter)
     correl_str = 'correl. coeff. r, r^2, p-value:'
     linreg_str = 'slope, offset:'
     err_str = 'RMSE, MRE:'
@@ -757,57 +763,29 @@ def figseries(rotate=-10.):
                                       ):
         print 'Data resampled at {}'.format(sample)
         for var, varlabel in zip(['vc', 'vl'],['u - cross-shore', 'v - along-shore']):
-            # index of ADV values where var>tau
-            isaboveTau = d_ADV[var][d_ADV[var].abs()>tau].index
-            # intersection with estimates
-            inboth = d_estim.index.intersection(isaboveTau)
-            #inboth = d_estim.index.intersection(d_ADV.index)
-            print '\t{} ({} points with |v_ADV|>{}):'.format(varlabel, len(inboth), tau)
+            # if we look at the 'instantaneous values'
+            if (tau>0) and (sample==resample_short):
+                # index of ADV values where var>tau
+                isaboveTau = d_ADV[var][d_ADV[var].abs()>tau].index
+                # intersection with estimates
+                inboth = d_estim.index.intersection(isaboveTau)
+                print '\t{} ({} points with |{}_ADV|>{}):'.format(varlabel, len(inboth), var, tau)
+            else:
+                inboth = d_estim.index.intersection(d_ADV.index)
+                print '\t{} ({} points):'.format(varlabel, len(inboth), tau)
             # compute stats
             v_rmse = numpy.sqrt(numpy.mean((d_ADV[var][inboth] - d_estim[var][inboth])**2))
-            v_mre = numpy.mean(numpy.abs(d_ADV[var][inboth] - d_estim[var][inboth])/numpy.abs(d_ADV[var][inboth]))
+            v_mre = numpy.median(numpy.abs(d_ADV[var][inboth] - d_estim[var][inboth])/numpy.abs(d_ADV[var][inboth]))
             v_slope, v_offset, v_r, v_p, v_stderr = stats.linregress(d_ADV[var][inboth], d_estim[var][inboth])
             print '\t\t{:25s} {:.2f}, {:.2f}'.format(err_str, v_rmse, v_mre)
-            print '\t\t{:25s} {:.2f}, {:.2f}, {:.2f}'.format(correl_str, v_r, v_r**2, v_p)
+            print '\t\t{:25s} {:.2f}, {:.2f}, {:.4f}'.format(correl_str, v_r, v_r**2, v_p)
             print '\t\t{:25s} {:.2f}, {:.2f}'.format(linreg_str, v_slope, v_offset)
-
-
-#
-#         # intersection
-#         inboth = d_estim.index.intersection(d_ADV.index)
-#         # compute stats
-#         vl_rmse = numpy.sqrt(numpy.mean((d_ADV['vl'][inboth] - d_estim['vl'][inboth])**2))
-#         vc_rmse = numpy.sqrt(numpy.mean((d_ADV['vc'][inboth] - d_estim['vc'][inboth])**2))
-#         vl_mre = numpy.mean(numpy.abs(d_ADV['vl'][inboth] - d_estim['vl'][inboth])/numpy.abs(d_ADV['vl'][inboth]))
-#         vc_mre = numpy.mean(numpy.abs(d_ADV['vc'][inboth] - d_estim['vc'][inboth])/numpy.abs(d_ADV['vc'][inboth]))
-#         vl_slope, vl_offset, vl_r, vl_p, vl_stderr = stats.linregress(d_ADV['vl'][inboth], d_estim['vl'][inboth])
-#         vc_slope, vc_offset, vc_r, vc_p, vc_stderr = stats.linregress(d_ADV['vc'][inboth], d_estim['vc'][inboth])
-#         # print stuff
-#         correl_str = 'correl. coeff. r, r^2:'
-#         linreg_str = 'slope, offset:'
-#         err_str = 'RMSE, MRE:'
-#         print 'Data sampled at {} ({} points)'.format(sample, len(inboth))
-#         print '\tlong-shore:'
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(err_str, vl_rmse, vl_mre)
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(correl_str, vl_r, vl_r**2)
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(linreg_str, vl_slope, vl_offset)
-#         print '\tcross-shore:'
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(err_str, vc_rmse, vc_mre)
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(correl_str, vc_r, vc_r**2)
-#         print '\t\t{:25s} {:.2f}, {:.2f}'.format(linreg_str, vc_slope, vc_offset)
-#         pyplot.figure()
-#         pyplot.subplot(2,1,1)
-#         pyplot.plot(numpy.abs(data_ADV['vl'][inboth] - data_estim['vl'][inboth])/numpy.abs(data_ADV['vl'][inboth]), color='0.4')
-#         pyplot.subplot(2,1,2)
-#         pyplot.plot(numpy.abs(data_ADV['vc'][inboth] - data_estim['vc'][inboth])/numpy.abs(data_ADV['vc'][inboth]), color='0.4')
-#     pyplot.show()
-#     return
 
     ### plot spectrum
     # compute welch's estimates
-    dt = 2. #same as resample_short
-    nwin = 450 #300 pt x 2s = 10 min
-    offset = 10.
+    dt = 2. #must be the same as resample_short
+    nwin = int(90*60*(1./dt)) #15 min x 60s/min x 1/dt sample/s
+    offset = 10. #offset the cross-shore spectra
     _, Psd_vl_ADV = signal.welch(data_ADV['vl'], fs=1./dt, nperseg=nwin)
     _, Psd_vl_estim = signal.welch(data_estim['vl'], fs=1./dt, nperseg=nwin)
     f_ADV, Psd_vc_ADV = signal.welch(data_ADV['vc'], fs=1./dt, nperseg=nwin)
@@ -834,12 +812,12 @@ def figseries(rotate=-10.):
     ax0.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
     # save
     pyplot.subplots_adjust(left=.17, bottom=.22, right=.99, top=.93)
-    outfile = '../figures/spectrum_rot{}{}_{:.0f}dpi.png'.format(
+    outfile = '../figures/TMPspectrum_rot{}{}_{:.0f}dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
     fig0.savefig(outfile,
                  dpi=dpi)
     print 'saved', outfile
-    outfile = '../figures/spectrum_rot{}{}_150dpi.png'.format(
+    outfile = '../figures/TMPspectrum_rot{}{}_150dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)))
     fig0.savefig(outfile,
                  dpi=150)
@@ -863,18 +841,12 @@ def figseries(rotate=-10.):
         for data, color, label, lw, zorder in zip([data_estim, data_ADV],
                                                   ['r', '.4'], ['OF', 'ADV'],
                                                   [0.75, 0.75], [2, 1]):
-            # the enveloppe (disabled)
-            # see https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.hilbert.html
-            #vmean = numpy.mean(data[var])
-            #ht = signal.hilbert(data[var] - vmean)
-            #data['envp'] = vmean + numpy.abs(ht)
-            #data['envm'] = vmean - numpy.abs(ht)
-            # rolling averages 61 pt = 2 min
-            tmp1 = data.rolling(61, center=False, min_periods=1).mean() #61 pt (2-min) rolling window
+            # rolling average over resample_large window (2 min)
+            tmp1 = data.rolling(resample_large, center=False, min_periods=1).mean()
+            # decimate for plot?
+            #tmp1 = tmp1.resample('30S').first()
             # curves
             ax1.plot(tmp1.index, tmp1[var], color=color, label=label, lw=2*lw, zorder=5+zorder)
-            #ax1.fill_between(tmp1.index, tmp1['envm'], tmp1['envp'],
-            #                 facecolor=color, edgecolor=color, alpha=0.25, zorder=zorder)
             ax2.plot(data.index, data[var], color=color, label=label, lw=lw, zorder=zorder)
         # labels
         for ax in [ax1, ax2]:
@@ -906,12 +878,12 @@ def figseries(rotate=-10.):
         ax2.set_ylim(-1.5, 1.5)
         # adjust
         pyplot.subplots_adjust(left=.07, bottom=.19, right=.97, top=.955, hspace=.26)
-        outfile = '../figures/timeseries_{}_rot{}{}_{:.0f}dpi.png'.format(
+        outfile = '../figures/TMPtimeseries_{}_rot{}{}_{:.0f}dpi.png'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
         fig1.savefig(outfile,
                      dpi=dpi)
         print 'saved', outfile
-        outfile = '../figures/timeseries_{}_rot{}{}_150dpi.png'.format(
+        outfile = '../figures/TMPtimeseries_{}_rot{}{}_150dpi.png'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)))
         fig1.savefig(outfile,
                      dpi=150)
@@ -942,7 +914,7 @@ if __name__=="__main__":
         shorecamTimestep()
 
     # shore estimations - ADV scatterplot
-    if 0:
+    if 1:
         figseries()
 
     # drone estimations - tracer figure

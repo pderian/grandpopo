@@ -1,3 +1,11 @@
+"""Preprocess Grand Popo video frames.
+
+- rectification and gridding (interpolation);
+- median filtering.
+
+Written by P. DERIAN 2016-2017
+www.pierrederian.net
+"""
 ###
 import glob
 import os
@@ -511,19 +519,79 @@ def test_mapping(matfile, H):
     print 'XHorPixAqua: {} -> to UTM: {:.2f} (XUTMAqua: {:.2f})'.format(ref_ix, tX[ref_iy, ref_ix], ref_x)
     print 'YVertPixAqua: {} -> to UTM: {:.2f} (YUTMAqua: {:.2f})'.format(ref_iy, tY[ref_iy, ref_ix], ref_y)
 
+def test_footprint(matfile, H, imagefile):
+
+    img = skio.imread(imagefile)
+
+    ### from projection matrix
+    nX = 1600
+    nY = 728
+    xADV = 660
+    yADV = 360
+    # image grid
+    ix = numpy.arange(nX) #pixels
+    iy = numpy.arange(nY)
+    iX, iY = numpy.meshgrid(ix, iy)
+    iYX = numpy.hstack((iY.ravel().reshape((-1,1)),
+                        iX.ravel().reshape((-1,1))),
+                        )
+    # transform
+    projection = sktransform.ProjectiveTransform(numpy.array(H))
+    # real-world coords
+    tYX = projection(iYX)
+    tX = tYX[:,1].reshape((nY, nX))
+    tY = tYX[:,0].reshape((nY, nX))
+    dX = tX[1:, 1:] - tX[:-1, :-1]
+    dY = tY[1:, 1:] - tY[:-1, :-1]
+    dist = numpy.sqrt(dX**2 + dY**2)
+    dX = numpy.abs(numpy.diff(tX, axis=-1))
+    dY = numpy.abs(numpy.diff(tY, axis=0))
+    print 'Projection matrix:'
+    print '\tpixel diagonal at ADV:', dist[yADV, xADV]
+    print '\tpixel dX at ADV:', dX[yADV, xADV]
+    print '\tpixel dY at ADV:', dY[yADV, xADV]
+    pyplot.subplot(211)
+    p = pyplot.imshow(dist, cmap='viridis', vmin=0, vmax=0.5)
+    pyplot.plot(xADV, yADV, 'o')
+    pyplot.colorbar(p, shrink=0.5)
+
+    pyplot.subplot(212)
+    p = pyplot.imshow(img)
+    pyplot.contour(dY, [0.05, 0.1], color='r')
+    pyplot.contour(dX, [0.05, 0.1], color='k')
+    pyplot.plot(xADV, yADV, 'o')
+
+    ### from interp matrix
+    pmat = scio.loadmat(matfile)
+    tX = pmat['X'] # true world (UTM coords)
+    tY = pmat['Y']
+    dX = tX[1:, 1:] - tX[:-1, :-1]
+    dY = tY[1:, 1:] - tY[:-1, :-1]
+    dist = numpy.sqrt(dX**2 + dY**2)
+    dX = numpy.abs(numpy.diff(tX, axis=-1))
+    dY = numpy.abs(numpy.diff(tY, axis=0))
+    print 'Interpolation matrix:'
+    print '\tpixel diagonal at ADV:', dist[yADV, xADV]
+    print '\tpixel dX at ADV:', dX[yADV, xADV]
+    print '\tpixel dY at ADV:', dY[yADV, xADV]
+
+    pyplot.show()
+
 ### MAIN ####
 #############
 if __name__=="__main__":
 
     ### tests
     #H = DEFAULT_H
-    #mappingFile = '../data/GrandPopo_Misc/CoordonneesXY_GPP_20141013.mat'
+    #mappingFile = '../data/CoordonneesXY_GPP_20141013.mat'
     #H = estimate_H_from_mapping(mappingFile)
     #print numpy.array_repr(H, precision=16)
     #check_H(mappingFile, H)
+    #test_footprint(mappingFile, DEFAULT_H, "resources/sample_frame_release.jpg")
     #test_mapping(mappingFile, H)
     #test_projection(mappingFile, H, '../data/GrandPopo_Misc/ex_rgb_frame.jpg')
 
+    ### run the demo
     preprocessor = DataPreprocessor(
         H=DEFAULT_H,
         origin=(370220., 694040.),
@@ -531,5 +599,5 @@ if __name__=="__main__":
         rotation=0.,
         resolution=0.2,
         )
-    preprocessor.demo("resources/sample_frame_release.jpg",
-                      "resources/grandpopo_config.jpg")
+     preprocessor.demo("resources/sample_frame_release.jpg",
+                       "resources/grandpopo_config.jpg")
