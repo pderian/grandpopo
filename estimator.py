@@ -274,7 +274,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
                          jsondata['gridRotation'], jsondata['gridResolution'])
     if xx.shape[0]!=height or xx.shape[1]!=width:
         print 'Generated grid does not match image size! Abort.'
-        sys.exit(-1) 
+        sys.exit(-1)
 
     #-initialize timeseries data structure
     ######################################
@@ -282,7 +282,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
         if verbose:
             print "Results will be save as timeseries in .json archive."
         # the probe
-        is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2 
+        is_probed = ((xx - AVG_PROBE['x'])**2 + (yy - AVG_PROBE['y'])**2) <= AVG_PROBE['r']**2
         # the data structure
         result_timeseries = {
             'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
@@ -305,7 +305,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
             'dt': [],
             'dx': dx,
             }
-    
+
     #-initialize fields data structure
     ##################################
     if save_fields:
@@ -330,10 +330,10 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
             'x_descr': 'UTM eastern (x) coordinates of grid points',
             'y': yy_coarse,
             'y_descr': 'UTM northern (y) coordinates of grid points',
-            'ux': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
-            'ux_descr': 'horizontal (x) displacement in [pixel], positive towards right (image reference)',
-            'uy': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
-            'uy_descr': 'vertical (y) displacement in [pixel], positive towards bottom (image reference)',
+            'vx': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
+            'vx_descr': 'horizontal (x) velocity in [m/s], positive towards right (image reference)',
+            'vy': numpy.zeros((n_frames-1, height_coarse, width_coarse), dtype='float32'),
+            'vy_descr': 'vertical (y) velocity in [m/s], positive towards bottom (image reference)',
             'dx': dx_coarse,
             'dx_descr': 'spatial resolution in [meter/pixel]',
             'dt': [],
@@ -347,7 +347,7 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
             'method': 'wavelet-based optical flow (WOF) - (cu)Typhoon algorithm',
             'author': 'Pierre Derian - contact@pierrederian.net',
             'createdBy': __file__,
-            'description': 'Apparent displacements in [pixel] estimated by (cu)Typhoon between images pairs listed in "SourceData". For the motions, the image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Displacements can be converted to (approximations of) instantaneous velocities by multiplying "ux" and "uy" by "dx"/"dt".',
+            'description': 'Apparent velocities in [m/s] estimated by (cu)Typhoon between images pairs listed in "SourceData". For the motions, the image reference is used: origin is top-left, x positive towards right and y positive towards bottom. Fields were decimated from estimation resolution ({} m/px) to a coarser resolution ("dx"={} m/px) by interpolation.'.format(dx, dx_coarse),
             'comment': comment,
             }
 
@@ -435,15 +435,16 @@ def estimate(infofile, serverPort, outputdir=None, comment='', verbose=True,
             # and to result fields
             if save_fields:
                 # interpolate motion to coarse grid and store in result
-                # Note: the coordinates order is the same as numpy's dimensions       
+                # Note: the coordinates order is the same as numpy's dimensions
+                # Note: and we convert to velocity using the original dx (NOT dx_coarse)
                 interpolator = interpolate.RectBivariateSpline(y_fine, x_fine, Ux)
-                result_fields['ux'][k] = interpolator(y_coarse, x_coarse, grid=True)
+                result_fields['vx'][k] = (dx/dt_img)*interpolator(y_coarse, x_coarse, grid=True)
                 interpolator = interpolate.RectBivariateSpline(y_fine, x_fine, Uy)
-                result_fields['uy'][k] = interpolator(y_coarse, x_coarse, grid=True)
+                result_fields['vy'][k] = (dx/dt_img)*interpolator(y_coarse, x_coarse, grid=True)
                 # and the corresponding time (of img0) and time step (between image pair)
                 result_fields['t'].append(t_img0.strftime('%Y-%m-%d %H:%M:%S.%f'))
                 result_fields['dt'].append(dt_img)
-            
+
             # [DEBUG] display
             if 0:
                 dimY, dimX = Ux.shape
@@ -551,7 +552,7 @@ where
                         help="do NOT save fields as .mat (default)")
     parser.add_argument("-r", "--resolution", default=0.5, type=float, dest="coarse_res",
                         help="coarse resolution [m/px] of the output fields, with --fields.")
-                        
+
     parser.set_defaults(verbose=True, stopServer=False, save_probe=True, save_fields=False)
     args = parser.parse_args(argv)
 

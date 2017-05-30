@@ -17,6 +17,13 @@ FFMPEG_DIR = '/opt/local/bin'
 ### The orientation of the beach reference w.r.t. Easting, Northing reference.
 BEACH_ORIENTATION = 10. # in [degree]
 
+### The local gravity at grand Popo
+# source: https://www.sensorsone.com/local-gravity-calculator/
+G_GRAV = 9.78089 # in [m/s2] at GrandPopo location (6.02 degree North)
+
+### The water depth
+H_WATER = 1. # in [m]
+
 ### Case parameters
 PARAMS_COMP60 = {
     # Parameters for the 60x60 m area covering the ADV/Aquapro sensors (TGRS paper)
@@ -60,12 +67,19 @@ PARAMS_SWASH125 = {
     }
 
 ### Averaging probe for time-series
-# located near the instruments
-# this probe was used in v1 and early tests of v2.
+# Located near the instruments, between ADV and ADCP
+# this probe was used in v1 and v2.
 AVG_PROBE_LEGACY = {
     'x': 370325.0, # x (easting) coordinate in [m]
     'y': 694098.0, # y (northing) coordinate in [m]
     'r': 1.0 # probe radius in [m]
+}
+# Centered on ADV
+# this is used for the vector field + time-series video
+AVG_PROBE_ADV = {
+    'x': 370323.5, # x (easting) coordinate in [m]
+    'y': 694097.8, # y (northing) coordinate in [m]
+    'r': 1. # probe radius in [m]
 }
 # this is the default probe
 AVG_PROBE = AVG_PROBE_LEGACY

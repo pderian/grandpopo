@@ -599,5 +599,5 @@ if __name__=="__main__":
         rotation=0.,
         resolution=0.2,
         )
-     preprocessor.demo("resources/sample_frame_release.jpg",
-                       "resources/grandpopo_config.jpg")
+    preprocessor.demo("resources/sample_frame_release.jpg",
+                      "resources/grandpopo_config.jpg")
