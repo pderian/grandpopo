@@ -9,7 +9,7 @@ import numpy
 ### Path
 ROOT_RAWDATA_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Videos'
 ROOT_PREPROC_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Frames'
-# ROOT_ESTIM_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Estim/'
+#ROOT_ESTIM_DIR = '/Volumes/LaCie_Mac/pderian/data_GPP/Estim/'
 ROOT_ESTIM_DIR = '/Users/pderian/Documents/Data/GrandPopo/data/plage/estim'
 # this is the directory where ffmpeg & co are installed, since libav sucks ass.
 FFMPEG_DIR = '/opt/local/bin'
@@ -65,27 +65,38 @@ PARAMS_SWASH125 = {
     'dimensions': (125., 45.), # domain size in [m]
     'rotation': BEACH_ORIENTATION, # domain rotation in [degree] around origin, see BEACH_ORIENTATION
     }
+PARAMS_FIELD60 = {
+    # Parameters for the 60x60 m area covering the ADV/Aquapro sensors (TGRS paper)
+    # here showing unfiltered (color) images for the vector field movie
+    'label': 'fields_60m', #a label for the frame directory
+    'image_format': 'jpg', #format of output images
+    'median_length': 0, #length of median filter in [m]
+    'resolution': 0.1, #[m/px]
+    'origin': (370295., 694053.), # origin (x,y) easting, northing of the domain in [m]
+    'dimensions': (60., 60.), # domain size in [m]
+    'rotation': 0., # domain rotation in [degree] around origin
+    }
 
 ### Averaging probe for time-series
 # Located near the instruments, between ADV and ADCP
-# this probe was used in v1 and v2.
+# this probe was used in v0, v1 and v2.
 AVG_PROBE_LEGACY = {
     'x': 370325.0, # x (easting) coordinate in [m]
     'y': 694098.0, # y (northing) coordinate in [m]
     'r': 1.0 # probe radius in [m]
 }
 # Centered on ADV
-# this is used for the vector field + time-series video
+# this is used for the (vector field + time-series) video
 AVG_PROBE_ADV = {
     'x': 370323.5, # x (easting) coordinate in [m]
     'y': 694097.8, # y (northing) coordinate in [m]
     'r': 1. # probe radius in [m]
 }
-# this is the default probe
+# Set the default probe
 AVG_PROBE = AVG_PROBE_LEGACY
 
 ### Projection
-# this H was estimated from the mapping in the mat file.
+# this H was estimated from the mapping matrices defined in the mat file.
 # see preprocessor.estimate_H_from_mapping()
 DEFAULT_H = [
     [2.4795542480487102e+03, 6.7539967752787433e+01,

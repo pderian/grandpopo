@@ -76,9 +76,11 @@ if __name__=="__main__":
 
     if action=='decoder':
         # the area centered over sensors
-        pattern = '20140313/1[2-6]/*.mp4' #sensors
-        process_group(pattern, params=PARAMS_COMP60)
+        #pattern = '20140313/1[2-6]/*.mp4' #sensors, 4 hours
+        pattern = '20140313/15/0[0-4]*.mp4' #sensors also, only 5 min
+        #process_group(pattern, params=PARAMS_COMP60)
         #process_group(pattern, params=PARAMS_COMP30)
+        process_group(pattern, params=PARAMS_FIELD60)
         # the wide field for flash rip monitoring (TGRS paper)
         #pattern = '20140312/12/*.mp4' #flash rip
         #process_group(pattern, params=PARAMS_RIP120)
@@ -86,8 +88,8 @@ if __name__=="__main__":
         #pattern = '20140313/15/*.mp4' # [TMP]
         #process_group(pattern, params=PARAMS_SWASH125)
 
-#### Note on igrida runs:
-# oarsub -I -p "host='igrida-abacus.irisa.fr' AND gpu='YES'" -l walltime=00:30:00
+#### Note on typical igrida runs:
+# oarsub -I -p "host='igrida-abacus.irisa.fr' AND gpu='YES'" -l walltime=00:30:00 -t besteffort
 #
 # module load cuda
 # /udd/pderian/resources/TyphoonPack_v2/build_yupana/CuTyphoon/cutyphoon_server -h -nD 6 -nE 6 -nM 7 -nPyr 1 -nI 3 -r 1 -a 1e-3 -port 40000 -dev 1 > /temp_dd/igrida-fs1/pderian/SCRATCH/gpp/estim/timeseries_60m/typhoon_log.txt 2>&1 &

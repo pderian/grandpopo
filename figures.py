@@ -137,6 +137,40 @@ def rolling_median_test2(data, win='1T', tau=10):
     isvalid = residual < residual_cutoff
     return data[isvalid]
 
+def welch_dopplershift(x, fs, nperseg):
+    # 50% overlap
+    noverlap = nperseg // 2
+    # the segment indices
+    step = nperseg - noverlap
+    indices = numpy.arange(0, x.shape[-1]-nperseg+1, step)
+    # for each segment
+    phase_speed = numpy.sqrt(H_WATER*G_GRAV)
+    result = []
+    for ind in indices:
+        # the segment data
+        tmp_x = x[ind:ind+nperseg]
+        # its periodgoram
+        [tmp_f, tmp_Pxx] = signal.periodogram(tmp_x, fs, 'hanning', nperseg)
+        # the Doppler shift
+        tmp_mean = numpy.mean(tmp_x)
+        tmp_df = tmp_f*(phase_speed/(tmp_x.mean() + phase_speed))
+        result.append((tmp_f, tmp_df, tmp_Pxx))
+    # regroup the various spectra
+    fref = numpy.arange(0., fs, fs/nperseg)
+    P0 = numpy.zeros_like(fref);
+    nS = numpy.zeros_like(P0);
+    for f, df, Pxx in result:
+        ifds = numpy.digitize(df, fref)
+        for j,k in enumerate(ifds):
+            # if the destination bin (k) is valid
+            if k>0 and k<P0.size:
+                P0[k] += Pxx[j]
+                nS[k] += 1.
+    has_sample = nS>0
+    fref = fref[has_sample]
+    P0 = P0[has_sample]/nS[has_sample]
+    return fref, P0, result
+
 ### MAIN PLOTTING FUNCTIONS ###
 ###############################
 def figmap(as_grey=False, with_panels=False):
@@ -664,6 +698,33 @@ def figvectors():
     pyplot.subplots_adjust(left=0.07, bottom=.08, right=0.98, top=0.94, hspace=0.25)
     fig.savefig('../figures/dyevectors_{:.0f}dpi.png'.format(dpi), dpi=dpi)
     fig.savefig('../figures/dyevectors_150dpi.png', dpi=150)
+    pyplot.close(fig)
+
+    # [WIP] display mean field
+    fig = pyplot.figure(figsize=(w, h))
+    # load frame
+    img = pyplot.imread(os.path.join(rootframedir, framenames[319]))
+    # create subplot
+    ax = fig.add_subplot(111, aspect='equal',
+                         title='Mean field')
+    set_axes_color(ax, axcolor) #manually change axes elements color
+    # plot image
+    p = ax.imshow(img, origin='lower', extent=[x[0], x[-1], y[0], y[-1]], cmap='gray', zorder=0)
+    ux_mean = numpy.mean(ux, axis=0)
+    uy_mean = numpy.mean(uy, axis=0)
+    tmp_ux = numpy.ma.array(ux_mean, mask=not_mask)
+    tmp_uy = numpy.ma.array(uy_mean, mask=not_mask)
+    # plot vectors
+    qstep = 10
+    q = ax.quiver(x[::qstep], y[::qstep],
+                  tmp_ux[::qstep, ::qstep], tmp_uy[::qstep, ::qstep],
+                  color='w',
+                  units='xy', angles='xy', scale_units='xy', scale=.33,
+                  width=.5, zorder=3)
+    ax.set_xlim(27.5, 112.5)
+    ax.set_ylim(10., 60.)
+    ax.invert_xaxis()
+    ax.invert_yaxis()
     pyplot.show()
 
 def shorecamTimestep():
@@ -695,6 +756,15 @@ def shorecamTimestep():
     pyplot.show()
 
 def figseries(rotate=(-10.)):
+    """
+
+    Note: the difference (vc_surf - vc_below) with
+        - vc_surf = vc_estim, the surface cross-shore velocity (by OF estim)
+        - vc_bottom = vc_ADV, below-surface cross-shore velocity (by the ADV)
+    remain +/- constant throughout the considered time window. Therefore the
+    Doppler-corrected spectra are +/- the same whether using the overall average
+    velocity, or by shifting each segment by the local average (welch_dopplershift).
+    """
 
     #### plot parameters
     w1 = 3.5 #inches (43 picas) IEEE single colum
@@ -749,9 +819,6 @@ def figseries(rotate=(-10.)):
     zmin = 1530 # this is for the zoom
     zmax = zmin + 300
 
-    print data_estim['vc'][:10]
-    return
-
     ### statistics
     tau = 0. #to filter out low velocities (0 =  no filter)
     correl_str = 'correl. coeff. r, r^2, p-value:'
@@ -784,42 +851,104 @@ def figseries(rotate=(-10.)):
     ### plot spectrum
     # compute welch's estimates
     dt = 2. #must be the same as resample_short
-    nwin = int(90*60*(1./dt)) #15 min x 60s/min x 1/dt sample/s
+    fs = 1./dt
+    nwin = int(15*60*fs) #15 min x 60s/min x 1/dt sample/s
     offset = 10. #offset the cross-shore spectra
-    _, Psd_vl_ADV = signal.welch(data_ADV['vl'], fs=1./dt, nperseg=nwin)
-    _, Psd_vl_estim = signal.welch(data_estim['vl'], fs=1./dt, nperseg=nwin)
-    f_ADV, Psd_vc_ADV = signal.welch(data_ADV['vc'], fs=1./dt, nperseg=nwin)
-    f_estim, Psd_vc_estim = signal.welch(data_estim['vc'], fs=1./dt, nperseg=nwin)
+    _, P_vl_ADV = signal.welch(data_ADV['vl'], fs=fs, nperseg=nwin)
+    _, P_vl_estim = signal.welch(data_estim['vl'], fs=fs, nperseg=nwin)
+    f_ADV, P_vc_ADV = signal.welch(data_ADV['vc'], fs=fs, nperseg=nwin)
+    f_estim, P_vc_estim = signal.welch(data_estim['vc'], fs=fs, nperseg=nwin)
+    # compute global Doppler shift
+    phase_speed = numpy.sqrt(H_WATER*G_GRAV) #phase speed in [m/s]
+    mean_vc_estim = data_estim['vc'].mean()
+    mean_vc_ADV = data_ADV['vc'].mean()
+    mean_vl_estim = data_estim['vl'].mean()
+    mean_vl_ADV = data_ADV['vl'].mean()
+    f_vc_estim = f_estim*(phase_speed/(mean_vc_estim + phase_speed))
+    f_vl_estim = f_estim*(phase_speed/(mean_vl_estim + phase_speed))
+    f_vc_ADV = f_ADV*(phase_speed/(mean_vc_ADV + phase_speed))
+    f_vl_ADV = f_ADV*(phase_speed/(mean_vl_ADV + phase_speed))
+    print 'Mean vc: estim={:.3f}, ADV={:.3f} m/s'.format(mean_vc_estim, mean_vc_ADV)
+    print 'Mean vl: estim={:.3f}, ADV={:.3f} m/s'.format(mean_vl_estim, mean_vl_ADV)
+    # compute local Dopplershift
+    f_ds_vc_estim, P_ds_vc_estim, _ = welch_dopplershift(data_estim['vc'], fs, nwin)
+    f_ds_vl_estim, P_ds_vl_estim, _ = welch_dopplershift(data_estim['vl'], fs, nwin)
+    f_ds_vc_ADV, P_ds_vc_ADV, _ = welch_dopplershift(data_ADV['vc'], fs, nwin)
+    f_ds_vl_ADV, P_ds_vl_ADV, _ = welch_dopplershift(data_ADV['vl'], fs, nwin)
     # print stuff
-    imaxOF = numpy.argmax(Psd_vc_estim)
-    imaxADV = numpy.argmax(Psd_vc_ADV)
+    imaxOF = numpy.argmax(P_vc_estim)
+    imaxADV = numpy.argmax(P_vc_ADV)
     print 'OF peak: f={:.3f}, period={:.3f}'.format(f_estim[imaxOF], 1./f_estim[imaxOF])
     print 'ADV peak: f={:.3f}, period={:.3f}'.format(f_ADV[imaxADV], 1./f_ADV[imaxADV])
-    # create figure
-    fig0 = pyplot.figure(figsize=(w1,h), dpi=90)
-    ax0 = fig0.add_subplot(111, xlabel=r'$f$ (Hz)', ylabel=r'PSD estimate (m\textsuperscript{2}/s)',
+    # create figure(s)
+    #fig0 = pyplot.figure(figsize=(w1,h), dpi=90)
+    #fig2 = pyplot.figure(figsize=(w1,h), dpi=90)
+    fig3 = pyplot.figure(figsize=(w1,1.5*h), dpi=90)
+    ax0 = fig3.add_subplot(211, xlabel='', ylabel=r'raw PSD (m\textsuperscript{2}/s)',
+                          xscale='log', yscale='log')
+    ax2 = fig3.add_subplot(212, xlabel=r'$f$ (Hz)', ylabel=r'Doppler-corrected PSD (m\textsuperscript{2}/s)',
                           xscale='log', yscale='log')
     set_axes_color(ax0, axcolor)
-    ax0.plot(f_ADV[1:], Psd_vl_ADV[1:], '-', color='.4')
-    ax0.plot(f_estim[1:], Psd_vl_estim[1:], '-', color='r')
-    ax0.plot(f_ADV[1:], offset*Psd_vc_ADV[1:], '-', color='.4', lw=1.5)
-    ax0.plot(f_estim[1:], offset*Psd_vc_estim[1:], '-', color='r', lw=1.5)
-    # tune
+    set_axes_color(ax2, axcolor)
+    # plot raw spectra
+    ax0.plot(f_ADV[1:], P_vl_ADV[1:], '-', color='.4')
+    ax0.plot(f_estim[1:], P_vl_estim[1:], '-', color='r')
+    ax0.plot(f_ADV[1:], offset*P_vc_ADV[1:], '-', color='.4', lw=1.5)
+    ax0.plot(f_estim[1:], offset*P_vc_estim[1:], '-', color='r', lw=1.5)
+    # plot Doppler-shifted spectra
+    if True:
+        ax2.plot(f_vl_ADV[1:], P_vl_ADV[1:], '-', color='.4')
+        ax2.plot(f_vl_estim[1:], P_vl_estim[1:], '-', color='r')
+        ax2.plot(f_vc_ADV[1:], offset*P_vc_ADV[1:], '-', color='.4', lw=1.5)
+        ax2.plot(f_vc_estim[1:], offset*P_vc_estim[1:], '-', color='r', lw=1.5)
+    else:
+        ax2.plot(f_ds_vl_ADV, P_ds_vl_ADV, '-', color='.4')
+        ax2.plot(f_ds_vl_estim, P_ds_vl_estim, '-', color='r')
+        ax2.plot(f_ds_vc_ADV, offset*P_ds_vc_ADV, '-', color='.4', lw=1.5)
+        ax2.plot(f_ds_vc_estim, offset*P_ds_vc_estim, '-', color='r', lw=1.5)
+    # tune limits
     ax0.set_xlim(1./900, 0.3)
     ax0.set_ylim(1e-1, 1.5e2)
-    ### reset formatters
+    ax2.set_xlim(1./900, 0.3)
+    ax2.set_ylim(1e-1, 1.5e2)
+    # reset formatters
     ax0.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
     ax0.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
-    # save
-    pyplot.subplots_adjust(left=.17, bottom=.22, right=.99, top=.93)
-    outfile = '../figures/TMPspectrum_rot{}{}_{:.0f}dpi.png'.format(
+    ax2.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
+    ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.0e'))
+    # tune margins
+    #fig0.subplots_adjust(left=.17, bottom=.22, right=.99, top=.93)
+    #fig2.subplots_adjust(left=.17, bottom=.22, right=.99, top=.93)
+    fig3.subplots_adjust(left=.17, bottom=.12, right=.99, top=.98)
+    # save original spectrum
+    #outfile0 = '../figures/spectrum_rot{}{}_{:.0f}dpi.png'.format(
+    #    ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
+    #fig0.savefig(outfile0,
+    #             dpi=dpi)
+    #print 'saved', outfile0
+    #outfile0 = '../figures/spectrum_rot{}{}_150dpi.png'.format(
+    #    ('p' if rotate>0 else 'm'), int(abs(rotate)))
+    #fig0.savefig(outfile0,
+    #             dpi=150)
+    # save shifted spectrum
+    #outfile2 = '../figures/spectrum_Dopplershift_rot{}{}_{:.0f}dpi.png'.format(
+    #    ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
+    #fig2.savefig(outfile2,
+    #             dpi=dpi)
+    #print 'saved', outfile2
+    #outfile2 = '../figures/spectrum_Dopplershift_rot{}{}_150dpi.png'.format(
+    #    ('p' if rotate>0 else 'm'), int(abs(rotate)))
+    #fig2.savefig(outfile2,
+    #             dpi=150)
+    # save both spectra
+    outfile3 = '../figures/spectrum_duo_rot{}{}_{:.0f}dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
-    fig0.savefig(outfile,
+    fig3.savefig(outfile3,
                  dpi=dpi)
-    print 'saved', outfile
-    outfile = '../figures/TMPspectrum_rot{}{}_150dpi.png'.format(
+    print 'saved', outfile3
+    outfile3 = '../figures/spectrum_duo_rot{}{}_150dpi.png'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)))
-    fig0.savefig(outfile,
+    fig3.savefig(outfile3,
                  dpi=150)
 
     ### plot time-series
@@ -878,12 +1007,12 @@ def figseries(rotate=(-10.)):
         ax2.set_ylim(-1.5, 1.5)
         # adjust
         pyplot.subplots_adjust(left=.07, bottom=.19, right=.97, top=.955, hspace=.26)
-        outfile = '../figures/TMPtimeseries_{}_rot{}{}_{:.0f}dpi.png'.format(
+        outfile = '../figures/timeseries_{}_rot{}{}_{:.0f}dpi.png'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
         fig1.savefig(outfile,
                      dpi=dpi)
         print 'saved', outfile
-        outfile = '../figures/TMPtimeseries_{}_rot{}{}_150dpi.png'.format(
+        outfile = '../figures/timeseries_{}_rot{}{}_150dpi.png'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)))
         fig1.savefig(outfile,
                      dpi=150)

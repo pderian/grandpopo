@@ -14,7 +14,9 @@ import json
 import os
 import sys
 ###
+import matplotlib
 import matplotlib.pyplot as pyplot
+import matplotlib.patches as patches
 import matplotlib.dates as dates
 import numpy
 import pandas
@@ -23,6 +25,7 @@ import scipy.io as scio
 import scipy.signal as signal
 import scipy.stats as stats
 import skimage.io as skio
+import skimage.transform as sktransform
 ###
 from config import *
 sys.path.append('/Users/pderian/Documents/Python/Tools')
@@ -336,6 +339,41 @@ def ADVspectrum(rotate=-10.):
     pyplot.plot(data_ADVd.index, data_ADVd['vc'], 'k')
     pyplot.plot(data_ADVr.index, data_ADVr['vc'], 'g')
     pyplot.show()
+
+def welch_dopplershift(x, fs, nperseg):
+    # 50% overlap
+    noverlap = nperseg // 2
+    # the segment indices
+    step = nperseg - noverlap
+    indices = numpy.arange(0, x.shape[-1]-nperseg+1, step)
+    # for each segment
+    phase_speed = numpy.sqrt(H_WATER*G_GRAV)
+    result = []
+    for ind in indices:
+        # the segment data
+        tmp_x = x[ind:ind+nperseg]
+        # its periodgoram
+        [tmp_f, tmp_Pxx] = signal.periodogram(tmp_x, fs, 'hanning', nperseg)
+        # the Doppler shift
+        tmp_mean = numpy.mean(tmp_x)
+        tmp_df = tmp_f*(tmp_x.mean()/phase_speed)
+        result.append((tmp_f, tmp_df, tmp_Pxx))
+    # regroup the various spectra
+    fref = numpy.arange(0., fs, fs/nperseg)
+    P0 = numpy.zeros_like(fref);
+    nS = numpy.zeros_like(P0);
+    for f, df, Pxx in result:
+        fds = f-df #doppler-shifted freqs
+        ifds = numpy.digitize(fds, fref)
+        for j,k in enumerate(ifds):
+            # if the destination bin (k) is valid
+            if k>0 and k<P0.size:
+                P0[k] += Pxx[j]
+                nS[k] += 1.
+    has_sample = nS>0
+    fref = fref[has_sample]
+    P0 = P0[has_sample]/nS[has_sample]
+    return fref, P0, result
 
 #########
 
@@ -735,6 +773,49 @@ def test_median_vs_raw(rotate=-10.):
     pyplot.plot(data_raw.index, data_raw['vc'], 'k')
     pyplot.show()
 
+def test_Dopplershift(rotate=-10.):
+    ### load data
+    print 'Vector rotation = {:.3f} (Reference rotation = {:.3f})'.format(rotate, -rotate)
+    # load ADV
+    print 'Loading ADV...'
+    t_ADV, vl_ADV, vc_ADV = load_ADV_timeseries('resources/ADVdata_20130413_refEastNorth.txt', rotate=rotate)
+    tf_ADV = dates.date2num(t_ADV)
+    # load estimates
+    print 'Loading v2 estimates...'
+    flist_30 = sorted(glob.glob(os.path.join(ROOT_ESTIM_DIR, 'timeseries_30m/timeseries_30m_20140313_1*_probe.json')))
+    flist_60 = sorted(glob.glob(os.path.join(ROOT_ESTIM_DIR, 'timeseries_60m/timeseries_60m_20140313_1*_probe.json')))
+    t_estim, vl_estim, vc_estim = load_OF_timeseries(flist_60, rotate=rotate)
+    print '\t{} values loaded ({} - {})'.format(len(t_estim), t_estim[0], t_estim[-1])
+
+    ### prepare series
+    # make pandas objects
+    data_ADV = pandas.DataFrame({'vl':vl_ADV, 'vc':vc_ADV}, index=t_ADV)
+    data_estim = pandas.DataFrame({'vl':vl_estim, 'vc':vc_estim}, index=t_estim)
+
+    # resample (and average), drop missing data
+    resample_short = '2S' #2 s
+    resample_large = '2T' #2 min
+    data_ADV = data_ADV.resample(resample_short).mean().dropna()
+    data_estim = data_estim.resample(resample_short).mean().dropna()
+    # crop
+    tmin = '2014-03-13 12:29'
+    tmax = '2014-03-13 17:01'
+    data_estim = data_estim[tmin:tmax]
+    data_ADV = data_ADV[tmin:tmax]
+
+    ### plot spectrum
+    # compute welch's estimates
+    dt = 2. #must be the same as resample_short
+    fs = 1./dt #sampling frequency
+    nwin = int(15*60*fs) #15 min x 60s/min x fs sample/s
+    f_estim, P_vc_estim, result_vc_estim = welch_dopplershift(data_estim['vc'], fs, nwin)
+    f_ADV, P_vc_ADV, result_vc_ADV = welch_dopplershift(data_ADV['vc'], fs, nwin)
+
+    fig = pyplot.figure()
+    pyplot.loglog(f_ADV[1:], P_vc_ADV[1:])
+    pyplot.loglog(f_estim[1:], P_vc_estim[1:])
+    pyplot.show()
+
 ##########
 
 def fulltest(rotate=-10.):
@@ -1042,3 +1123,5 @@ if __name__=="__main__":
     #test_median_vs_raw()
     #test_probe()
     #fulltest()
+    #test_Dopplershift()
+    test_Flow()

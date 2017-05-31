@@ -259,6 +259,7 @@ def main(argv):
         dimensions=args.grid_dimensions,
         rotation=args.grid_rotation,
         median_length=args.median_length,
+        RGB=False, #[TODO] set RGB as argument? not needed in most cases
         )
 
     # Process file
