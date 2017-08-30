@@ -189,8 +189,11 @@ def vector():
             ### labels
             axb.legend(loc='upper center', bbox_to_anchor=(0.5, -0.33),
                        frameon=False, ncol=2)
-            pyplot.figtext(0.9, 0.04, u'Pierre D\u00E9rian & Rafael Almar, 2017',
-                           ha='right', va='bottom', fontsize='medium')
+            pyplot.figtext(0.795, 0.04, u'Pierre D\u00E9rian & Rafael Almar,\nIEEE Trans. Geosci. Remote Sens., 2017\nDOI: 10.1109/TGRS.2017.2714202',
+                           ha='center', va='bottom', fontsize='medium')
+            pyplot.figtext(0.5, 0.98, 'Sea surface current estimation by "Typhoon" wavelet-based optical flow\n- Grand Popo, Benin -',
+                           ha='center', va='top', fontsize='large')
+
 
             ### done
             fig.savefig('../TMP/{:03d}.png'.format(imov), dpi=dpi)

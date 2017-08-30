@@ -418,7 +418,7 @@ def figtracer(tracerfile, force_imgdir=None):
         ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
         ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
     pyplot.subplots_adjust(left=0.07, bottom=0.09, right=0.95, top=0.94, wspace=0., hspace=0.25)
-    fig.savefig('../figures/tracers_drone_avg_{:.0f}dpi.png'.format(dpi), dpi=dpi)
+    fig.savefig('../figures/tracers_drone_avg_{:.0f}dpi.pdf'.format(dpi), dpi=dpi)
     fig.savefig('../figures/tracers_drone_avg_150dpi.png', dpi=150)
 
 def tracerlifetime(tracerfile):
@@ -569,7 +569,7 @@ def figpreproc(beachraw_file, beachpreproc_file, droneraw_file, droneB_file, dro
     #### finish
 #     pyplot.subplots_adjust(left=.05, bottom=.08, right=.99, top=.95, hspace=.3, wspace=.24) #double column
     pyplot.subplots_adjust(left=.14, bottom=.08, right=.95, top=.96, hspace=.35, wspace=.5) #single column
-    fig.savefig('../figures/processing_{:.0f}dpi.png'.format(dpi), dpi=dpi)
+    fig.savefig('../figures/processing_{:.0f}dpi.pdf'.format(dpi), dpi=dpi)
     fig.savefig('../figures/processing_150dpi.png', dpi=150)
 
 def figvectors():
@@ -696,36 +696,10 @@ def figvectors():
         ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
     # adjust layout
     pyplot.subplots_adjust(left=0.07, bottom=.08, right=0.98, top=0.94, hspace=0.25)
-    fig.savefig('../figures/dyevectors_{:.0f}dpi.png'.format(dpi), dpi=dpi)
+    fig.savefig('../figures/dyevectors_{:.0f}dpi.pdf'.format(dpi), dpi=dpi)
     fig.savefig('../figures/dyevectors_150dpi.png', dpi=150)
     pyplot.close(fig)
 
-    # [WIP] display mean field
-    fig = pyplot.figure(figsize=(w, h))
-    # load frame
-    img = pyplot.imread(os.path.join(rootframedir, framenames[319]))
-    # create subplot
-    ax = fig.add_subplot(111, aspect='equal',
-                         title='Mean field')
-    set_axes_color(ax, axcolor) #manually change axes elements color
-    # plot image
-    p = ax.imshow(img, origin='lower', extent=[x[0], x[-1], y[0], y[-1]], cmap='gray', zorder=0)
-    ux_mean = numpy.mean(ux, axis=0)
-    uy_mean = numpy.mean(uy, axis=0)
-    tmp_ux = numpy.ma.array(ux_mean, mask=not_mask)
-    tmp_uy = numpy.ma.array(uy_mean, mask=not_mask)
-    # plot vectors
-    qstep = 10
-    q = ax.quiver(x[::qstep], y[::qstep],
-                  tmp_ux[::qstep, ::qstep], tmp_uy[::qstep, ::qstep],
-                  color='w',
-                  units='xy', angles='xy', scale_units='xy', scale=.33,
-                  width=.5, zorder=3)
-    ax.set_xlim(27.5, 112.5)
-    ax.set_ylim(10., 60.)
-    ax.invert_xaxis()
-    ax.invert_yaxis()
-    pyplot.show()
 
 def shorecamTimestep():
     """
@@ -773,6 +747,8 @@ def figseries(rotate=(-10.)):
     dpi = 450. #dpi
     fontsize = 8. #pt
     axcolor = '.2' #color of axes edges, ticks, labels, etc.
+    color_ADV = '.3' #dark gray
+    color_OF = '#f3a000' #orange
     # set the default font
     font = {'family' : 'sans-serif',
             'sans-serif':['Helvetica'],
@@ -891,21 +867,21 @@ def figseries(rotate=(-10.)):
     set_axes_color(ax0, axcolor)
     set_axes_color(ax2, axcolor)
     # plot raw spectra
-    ax0.plot(f_ADV[1:], P_vl_ADV[1:], '-', color='.4')
-    ax0.plot(f_estim[1:], P_vl_estim[1:], '-', color='r')
-    ax0.plot(f_ADV[1:], offset*P_vc_ADV[1:], '-', color='.4', lw=1.5)
-    ax0.plot(f_estim[1:], offset*P_vc_estim[1:], '-', color='r', lw=1.5)
+    ax0.plot(f_ADV[1:], P_vl_ADV[1:], '-', color=color_ADV)
+    ax0.plot(f_estim[1:], P_vl_estim[1:], '-', color=color_OF)
+    ax0.plot(f_ADV[1:], offset*P_vc_ADV[1:], '-', color=color_ADV, lw=1.5)
+    ax0.plot(f_estim[1:], offset*P_vc_estim[1:], '-', color=color_OF, lw=1.5)
     # plot Doppler-shifted spectra
     if True:
-        ax2.plot(f_vl_ADV[1:], P_vl_ADV[1:], '-', color='.4')
-        ax2.plot(f_vl_estim[1:], P_vl_estim[1:], '-', color='r')
-        ax2.plot(f_vc_ADV[1:], offset*P_vc_ADV[1:], '-', color='.4', lw=1.5)
-        ax2.plot(f_vc_estim[1:], offset*P_vc_estim[1:], '-', color='r', lw=1.5)
+        ax2.plot(f_vl_ADV[1:], P_vl_ADV[1:], '-', color=color_ADV)
+        ax2.plot(f_vl_estim[1:], P_vl_estim[1:], '-', color=color_OF)
+        ax2.plot(f_vc_ADV[1:], offset*P_vc_ADV[1:], '-', color=color_ADV, lw=1.5)
+        ax2.plot(f_vc_estim[1:], offset*P_vc_estim[1:], '-', color=color_OF, lw=1.5)
     else:
-        ax2.plot(f_ds_vl_ADV, P_ds_vl_ADV, '-', color='.4')
-        ax2.plot(f_ds_vl_estim, P_ds_vl_estim, '-', color='r')
-        ax2.plot(f_ds_vc_ADV, offset*P_ds_vc_ADV, '-', color='.4', lw=1.5)
-        ax2.plot(f_ds_vc_estim, offset*P_ds_vc_estim, '-', color='r', lw=1.5)
+        ax2.plot(f_ds_vl_ADV, P_ds_vl_ADV, '-', color=color_ADV)
+        ax2.plot(f_ds_vl_estim, P_ds_vl_estim, '-', color=color_OF)
+        ax2.plot(f_ds_vc_ADV, offset*P_ds_vc_ADV, '-', color=color_ADV, lw=1.5)
+        ax2.plot(f_ds_vc_estim, offset*P_ds_vc_estim, '-', color=color_OF, lw=1.5)
     # tune limits
     ax0.set_xlim(1./900, 0.3)
     ax0.set_ylim(1e-1, 1.5e2)
@@ -941,7 +917,7 @@ def figseries(rotate=(-10.)):
     #fig2.savefig(outfile2,
     #             dpi=150)
     # save both spectra
-    outfile3 = '../figures/spectrum_duo_rot{}{}_{:.0f}dpi.png'.format(
+    outfile3 = '../figures/spectrum_duo_rot{}{}_{:.0f}dpi.pdf'.format(
         ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
     fig3.savefig(outfile3,
                  dpi=dpi)
@@ -968,7 +944,7 @@ def figseries(rotate=(-10.)):
             set_axes_color(ax, axcolor)
         # plot stuff
         for data, color, label, lw, zorder in zip([data_estim, data_ADV],
-                                                  ['r', '.4'], ['OF', 'ADV'],
+                                                  [color_OF, color_ADV], ['OF', 'ADV'],
                                                   [0.75, 0.75], [2, 1]):
             # rolling average over resample_large window (2 min)
             tmp1 = data.rolling(resample_large, center=False, min_periods=1).mean()
@@ -1007,7 +983,7 @@ def figseries(rotate=(-10.)):
         ax2.set_ylim(-1.5, 1.5)
         # adjust
         pyplot.subplots_adjust(left=.07, bottom=.19, right=.97, top=.955, hspace=.26)
-        outfile = '../figures/timeseries_{}_rot{}{}_{:.0f}dpi.png'.format(
+        outfile = '../figures/timeseries_{}_rot{}{}_{:.0f}dpi.pdf'.format(
             var, ('p' if rotate>0 else 'm'), int(abs(rotate)), dpi)
         fig1.savefig(outfile,
                      dpi=dpi)
@@ -1024,7 +1000,7 @@ if __name__=="__main__":
         figmap()
 
     # raw / filtered preprocess figure
-    if 0:
+    if 1:
         beachraw_file = '/Users/pderian/Documents/Data/GrandPopo/data/plage/20140313/1500_026.png'
         beachmedian_file = '/Users/pderian/Documents/Data/GrandPopo/data/plage/20140313/median_15_00.nc'
         beachradon_file = '/Users/pderian/Documents/Data/GrandPopo/data/plage/20140313/radon_15_00.nc'
@@ -1043,13 +1019,13 @@ if __name__=="__main__":
         shorecamTimestep()
 
     # shore estimations - ADV scatterplot
-    if 1:
+    if 0:
         figseries()
 
     # drone estimations - tracer figure
     tracerfile = '/Users/pderian/Documents/Data/GrandPopo/data/drone/halfres/estim_median/advect_avg_movie/tracerpath'
     droneimg_dir = '/Users/pderian/Documents/Data/GrandPopo/data/drone/halfres/rectif_jpg'
-    if 0:
+    if 1:
         figtracer(tracerfile, force_imgdir=droneimg_dir)
     if 0:
         tracerlifetime(tracerfile)
